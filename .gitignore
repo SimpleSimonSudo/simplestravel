@@ -5,3 +5,4 @@ media
 __pycache__
 *.pyc
 tumblr_*.json
+frontend/node_modules
