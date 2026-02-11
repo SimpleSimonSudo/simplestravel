@@ -22,7 +22,7 @@ def update_urls_to_local(json_file="tumblr_posts.json",
                         extension = url.split('.')[-1].split('?')[0]
                         
                         # Neuer lokaler Pfad
-                        local_path = f"{media_base}/{post_id}/block_{block_idx}_{media_key}.{extension}"
+                        local_path = f"{media_base}/{post_id}/block_{block_idx}_img_{media_key}.{extension}"
                         
                         # Original-URL als Backup speichern
                         media['original_tumblr_url'] = media['url']
