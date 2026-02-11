@@ -8,7 +8,7 @@ pages_build_output_dir = ".open-next/assets"
 NEXT_PUBLIC_SUPABASE_URL = ""
 NEXT_PUBLIC_SUPABASE_ANON_KEY = ""
 
-[[d1_databases]]
+#[[d1_databases]]
 # Optional: Falls du später Cloudflare D1 nutzen willst
 # binding = "DB"
 # database_name = "traveling-planet-earth"
