@@ -18,7 +18,7 @@
     "@supabase/supabase-js": "^2.46.0"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "^1.0.0",
+    "@opennextjs/cloudflare": "^1.16.4",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -26,6 +26,6 @@
     "tailwindcss": "^3.4.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.40",
-    "wrangler": "^3.91.0"
+    "wrangler": "^4.64.0"
   }
 }
