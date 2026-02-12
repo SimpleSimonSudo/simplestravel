@@ -7,12 +7,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:cf": "@opennextjs/cloudflare",
-    "start": "next start",
-    "preview": "npx @opennextjs/cloudflare && wrangler pages dev",
-    "deploy": "npx @opennextjs/cloudflare && wrangler pages deploy",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "build:cf": "next build && npx @opennextjs/cloudflare build && mv .open-next/worker.js .open-next/_worker.js",
+    "preview": "npm run build:cf && wrangler pages dev .open-next",
+    "deploy": "npm run build:cf && wrangler pages deploy .open-next"
   },
   "dependencies": {
     "next": "^15.1.0",
