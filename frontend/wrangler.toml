@@ -2,8 +2,3 @@ name = "traveling-planet-earth"
 compatibility_date = "2026-02-21"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".open-next/assets"
-
-[vars]
-# Public Supabase vars (set real values in Cloudflare Dashboard → Settings → Variables)
-NEXT_PUBLIC_SUPABASE_URL = ""
-NEXT_PUBLIC_SUPABASE_ANON_KEY = ""
