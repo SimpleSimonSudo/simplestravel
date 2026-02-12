@@ -1,5 +1,5 @@
 name = "traveling-planet-earth"
-compatibility_date = "2024-09-23"
+compatibility_date = "2026-02-21"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".open-next/assets"
 
