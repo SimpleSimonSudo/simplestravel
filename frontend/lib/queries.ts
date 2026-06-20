@@ -46,15 +46,18 @@ export async function getPost(postId: string) {
 
   const [postRes, mediaRes] = await Promise.all([
     supabase
-      .from("posts_with_thumbnail")
-      .select("*")
+      .from("posts")
+      .select(`
+        *,
+        country:countries(name, name_de, iso_code),
+        trip:trips(trip_name)
+      `)
       .eq("post_id", postId)
       .single(),
     supabase
       .from("media")
       .select("*")
       .eq("post_id", postId)
-      .eq("media_type", "image")
       .order("block_index")
       .order("display_order"),
   ]);
@@ -66,10 +69,20 @@ export async function getPost(postId: string) {
 // Posts eines Trips
 export async function getTripPosts(tripId: number): Promise<TimelineRow[]> {
   const supabase = createServerClient();
+
+  const { data: tripData, error: tripError } = await (supabase
+    .from("trips")
+    .select("trip_name")
+    .eq("trip_id", tripId)
+    .single() as any);
+
+  if (tripError) throw tripError;
+  if (!tripData) return [];
+
   const { data, error } = await supabase
     .from("timeline")
     .select("*")
-    .eq("trip_name", tripId)
+    .eq("trip_name", tripData.trip_name)
     .order("post_date");
 
   if (error) throw error;

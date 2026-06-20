@@ -176,7 +176,7 @@ function RecentPostsSection({ posts }: { posts: TimelineRow[] }) {
         <div className="flex items-end justify-between mb-14">
           <div>
             <span className="overline block mb-3">Latest</span>
-            <h2 className="font-display text-ink" style={{ fontSize: "clamp(2rem, 5vw, 4rem)" }}>
+            <h2 className="font-display text-cream" style={{ fontSize: "clamp(2rem, 5vw, 4rem)" }}>
               Recent Posts
             </h2>
           </div>
@@ -187,7 +187,7 @@ function RecentPostsSection({ posts }: { posts: TimelineRow[] }) {
         </div>
 
         {/* Posts grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-ink/5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-white/5">
           {posts.map((post) => (
             <PostCard key={post.post_id} post={post} />
           ))}
@@ -203,7 +203,7 @@ function PostCard({ post }: { post: TimelineRow }) {
   return (
     <a
       href={`/post/${post.post_id}`}
-      className="group block bg-white p-6 hover:bg-cream/30 transition-colors duration-200"
+      className="group block bg-ink p-6 hover:bg-smoke transition-colors duration-200"
     >
       {/* Country + Trip */}
       <div className="flex items-center gap-2 mb-4">
@@ -218,7 +218,7 @@ function PostCard({ post }: { post: TimelineRow }) {
       </div>
 
       {/* Summary */}
-      <p className="font-body text-ink/70 text-sm leading-relaxed line-clamp-3 mb-5 min-h-[4.5rem]">
+      <p className="font-body text-cream/80 text-sm leading-relaxed line-clamp-3 mb-5 min-h-[4.5rem]">
         {post.summary ?? "—"}
       </p>
 
