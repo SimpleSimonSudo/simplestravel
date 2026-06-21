@@ -4,5 +4,12 @@ media
 .venv
 __pycache__
 *.pyc
-tumblr_*.json
+*.json
 frontend/node_modules
+frontend/.next
+frontend/.open-next
+frontend/.wrangler
+frontend/.env.local
+*.log
+*.csv
+
