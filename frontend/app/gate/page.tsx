@@ -29,7 +29,9 @@ export default function GatePage() {
   // Render Turnstile Captcha
   const renderTurnstile = () => {
     const L = (window as any).turnstile;
-    const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "1x00000000000000000000AA";
+    const siteKey = process.env.NODE_ENV === "development"
+      ? "1x00000000000000000000AA"
+      : (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "1x00000000000000000000AA");
 
     if (L && turnstileRef.current) {
       if (turnstileWidgetId.current !== null) {

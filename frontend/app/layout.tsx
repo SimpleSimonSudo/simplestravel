@@ -44,7 +44,7 @@ function Header() {
       {/* Nav */}
       <nav className="hidden md:flex items-center gap-8">
         <NavLink href="/">Journal</NavLink>
-        <NavLink href="/trips">Trips</NavLink>
+        <NavLink href="/#trips">Trips</NavLink>
         <NavLink href="/countries">Countries</NavLink>
         <NavLink href="/map">Map</NavLink>
       </nav>

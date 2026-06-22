@@ -95,7 +95,7 @@ function StatItem({ value, label }: { value: number; label: string }) {
 
 function TripsSection({ trips }: { trips: TripWithCountries[] }) {
   return (
-    <section className="px-8 py-24">
+    <section id="trips" className="px-8 py-24">
       <div className="max-w-6xl mx-auto">
         {/* Section header */}
         <div className="flex items-end justify-between mb-14">
@@ -105,10 +105,6 @@ function TripsSection({ trips }: { trips: TripWithCountries[] }) {
               The Trips
             </h2>
           </div>
-          <a href="/trips" className="hidden md:flex items-center gap-3 text-xs uppercase tracking-widest text-dust hover:text-amber transition-colors font-body group">
-            All trips
-            <ArrowRight className="group-hover:translate-x-1 transition-transform" />
-          </a>
         </div>
 
         {/* Trip list */}
@@ -124,37 +120,82 @@ function TripsSection({ trips }: { trips: TripWithCountries[] }) {
 
 function TripRow({ trip, index }: { trip: TripWithCountries; index: number }) {
   const countries = trip.countries ?? [];
+  const countryCodes = trip.country_codes ?? [];
   const dateStr = formatDateRange(trip.start_date, trip.end_date);
 
   return (
     <a
       href={`/trips/${trip.trip_id}`}
-      className="group flex flex-col md:flex-row md:items-center justify-between py-6 gap-4 hover:pl-3 transition-all duration-300"
+      className="group flex flex-col md:flex-row md:items-start justify-between py-8 gap-6 hover:pl-3 transition-all duration-300"
     >
-      {/* Left: number + name */}
-      <div className="flex items-center gap-6">
-        <span className="font-display text-dust/40 text-sm w-8 shrink-0">
+      {/* Left: number + name + description + route + metrics */}
+      <div className="flex items-start gap-6 flex-1">
+        <span className="font-display text-dust/40 text-sm w-8 shrink-0 pt-1">
           {String(index + 1).padStart(2, "0")}
         </span>
-        <div>
+        <div className="flex-1 min-w-0">
           <h3 className="font-display text-ink text-xl md:text-2xl group-hover:text-amber transition-colors">
             {trip.trip_name}
           </h3>
-          <p className="text-xs text-dust font-body mt-1">
-            {countries.slice(0, 5).join(" · ")}
-            {countries.length > 5 && ` · +${countries.length - 5} more`}
-          </p>
+          
+          {/* Description */}
+          {trip.description && (
+            <p className="font-body text-xs text-dust leading-relaxed line-clamp-2 mt-2 max-w-xl group-hover:text-ink/80 transition-colors">
+              {trip.description}
+            </p>
+          )}
+
+          {/* Route with flag emojis */}
+          {countries.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 items-center mt-3 text-xs text-ink font-body">
+              <span className="text-2xs uppercase tracking-widest text-dust mr-1">Route:</span>
+              {countries.map((country, idx) => (
+                <span key={country} className="inline-flex items-center text-xs text-ink font-body">
+                  {countryCodes[idx] && `${countryCodeToFlag(countryCodes[idx])} `}
+                  <span className="font-light">{country}</span>
+                  {idx < countries.length - 1 && <span className="text-dust/40 mx-1.5">·</span>}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Distance and Companions */}
+          {(trip.total_distance_km || (trip.companions && trip.companions.length > 0)) && (
+            <div className="flex flex-wrap gap-4 mt-3 text-2xs text-dust font-body">
+              {trip.total_distance_km && (
+                <span className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 text-dust/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    <path d="M2 12h20"/>
+                  </svg>
+                  {trip.total_distance_km.toLocaleString()} km
+                </span>
+              )}
+              {trip.companions && trip.companions.length > 0 && (
+                <span className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 text-dust/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                  {trip.companions.join(", ")}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Right: meta */}
-      <div className="flex items-center gap-6 md:gap-10 pl-14 md:pl-0">
+      {/* Right: date, posts, arrow */}
+      <div className="flex items-center gap-6 md:gap-10 pl-14 md:pl-0 pt-1 shrink-0">
         {dateStr && (
           <span className="text-xs text-dust font-body tabular-nums">{dateStr}</span>
         )}
-        <span className="font-display text-amber font-bold">
+        <span className="font-display text-amber font-bold text-lg md:text-xl">
           {trip.post_count}
-          <span className="text-dust text-xs font-body ml-1">posts</span>
+          <span className="text-dust text-xs font-body ml-1.5 font-normal">posts</span>
         </span>
         <span className="text-dust group-hover:text-amber transition-colors">
           <ArrowRight />
