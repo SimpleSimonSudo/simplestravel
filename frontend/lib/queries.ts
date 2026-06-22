@@ -50,7 +50,7 @@ export async function getPost(postId: string) {
       .select(`
         *,
         country:countries(name, name_de, iso_code),
-        trip:trips(trip_name)
+        trip:trips(trip_id, trip_name)
       `)
       .eq("post_id", postId)
       .single(),

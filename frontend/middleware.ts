@@ -2,11 +2,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
-  // In development mode, bypass the gate redirect entirely
-  if (process.env.NODE_ENV === "development") {
-    return NextResponse.next();
-  }
-
   const path = request.nextUrl.pathname;
 
   // 1. Erlaube Zugriffe auf statische Dateien, die Gate-Seite und den API-Verifikations-Endpunkt
@@ -14,6 +9,7 @@ export function middleware(request: NextRequest) {
     path.startsWith("/_next") ||
     path.startsWith("/gate") ||
     path.startsWith("/api/verify") ||
+    path.startsWith("/page_media") ||
     path === "/favicon.ico"
   ) {
     return NextResponse.next();

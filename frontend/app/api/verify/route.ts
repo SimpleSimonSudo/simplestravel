@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
 
     // 1. Cloudflare Turnstile CAPTCHA verifizieren (falls Secret Key gesetzt ist)
     const turnstileSecret = process.env.NODE_ENV === "development"
-      ? "1x000000000000000000000000000000000"
+      ? "1x0000000000000000000000000000000AA"
       : process.env.TURNSTILE_SECRET_KEY;
     if (turnstileSecret) {
       if (!turnstileToken) {
