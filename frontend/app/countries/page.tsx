@@ -16,7 +16,7 @@ export default async function CountriesPage() {
   // Gruppiere Länder nach Kontinenten
   const grouped: Record<string, CountryWithStats[]> = {};
   countries.forEach((country) => {
-    const continent = country.continent || "Andere Kontinente";
+    const continent = country.continent || "Other Continents";
     if (!grouped[continent]) {
       grouped[continent] = [];
     }
@@ -31,13 +31,13 @@ export default async function CountriesPage() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <header className="mb-16 text-center md:text-left">
-          <span className="overline block mb-3">Weltkarte</span>
+          <span className="overline block mb-3">World Map</span>
           <h1 className="font-display font-black text-5xl md:text-7xl text-ink mb-6">
-            Besuchte Länder.
+            Visited Countries.
           </h1>
           <p className="font-body text-dust text-sm md:text-base max-w-xl leading-relaxed">
-            Eine Sammlung aller bereisten Kontinente und Länder. 
-            Insgesamt wurden bisher {countries.length} Länder auf {sortedContinents.length} Kontinenten besucht.
+            A collection of all traveled continents and countries. 
+            A total of {countries.length} countries across {sortedContinents.length} continents have been visited so far.
           </p>
         </header>
 
@@ -45,18 +45,17 @@ export default async function CountriesPage() {
         <div className="space-y-16">
           {sortedContinents.map((continent) => {
             const continentCountries = grouped[continent];
-            const translateContinent = deContinent(continent);
 
             return (
               <section key={continent} className="space-y-6">
                 {/* Continent Title */}
                 <div className="flex items-center gap-4">
                   <h2 className="font-display font-bold text-2xl md:text-3xl text-ink">
-                    {translateContinent}
+                    {continent}
                   </h2>
                   <div className="h-px bg-ink/10 flex-1" />
                   <span className="text-2xs font-body text-dust uppercase tracking-widest">
-                    {continentCountries.length} {continentCountries.length === 1 ? "Land" : "Länder"}
+                    {continentCountries.length} {continentCountries.length === 1 ? "Country" : "Countries"}
                   </span>
                 </div>
 
@@ -68,9 +67,10 @@ export default async function CountriesPage() {
                     const trips = country.trips ?? [];
 
                     return (
-                      <div
+                      <a
+                        href={`/countries/${country.iso_code?.toLowerCase()}`}
                         key={country.country_id}
-                        className="group p-6 bg-white border border-ink/5 rounded-sm shadow-sm hover:border-amber/40 hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+                        className="group p-6 bg-white border border-ink/5 rounded-sm shadow-sm hover:border-amber/40 hover:shadow-md cursor-pointer transition-all duration-300 flex flex-col justify-between"
                       >
                         <div>
                           {/* Title & Badge */}
@@ -82,10 +82,7 @@ export default async function CountriesPage() {
                                 </span>
                               )}
                               <div>
-                                <span>{country.name_de || country.name}</span>
-                                {country.name_de && country.name_de !== country.name && (
-                                  <span className="block text-3xs font-body text-dust font-light uppercase tracking-wide mt-0.5">{country.name}</span>
-                                )}
+                                <span>{country.name}</span>
                               </div>
                             </h3>
                             <span className="tag shrink-0 bg-cream text-ink font-semibold">
@@ -96,9 +93,9 @@ export default async function CountriesPage() {
                           {/* Visited Dates */}
                           {firstDate && (
                             <p className="text-2xs font-body text-dust mb-4 tabular-nums">
-                              Besucht: {firstDate.toLocaleDateString("de-DE", { month: "short", year: "numeric" })}
+                              Visited: {firstDate.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
                               {lastDate && firstDate.getTime() !== lastDate.getTime() && (
-                                <> bis {lastDate.toLocaleDateString("de-DE", { month: "short", year: "numeric" })}</>
+                                <> to {lastDate.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}</>
                               )}
                             </p>
                           )}
@@ -107,7 +104,7 @@ export default async function CountriesPage() {
                         {/* Associated Trips */}
                         {trips.length > 0 && (
                           <div className="border-t border-ink/5 pt-4 mt-2">
-                            <p className="text-3xs uppercase tracking-widest text-dust font-body mb-2">Reisen:</p>
+                            <p className="text-3xs uppercase tracking-widest text-dust font-body mb-2">Trips:</p>
                             <div className="flex flex-col gap-1">
                               {trips.map((tripName) => (
                                 <span
@@ -120,7 +117,7 @@ export default async function CountriesPage() {
                             </div>
                           </div>
                         )}
-                      </div>
+                      </a>
                     );
                   })}
                 </div>
@@ -139,18 +136,4 @@ function countryCodeToFlag(code: string): string {
     .split("")
     .map((c) => String.fromCodePoint(127397 + c.charCodeAt(0)))
     .join("");
-}
-
-// Hilfsfunktion zur Übersetzung der Kontinente ins Deutsche
-function deContinent(c: string): string {
-  const map: Record<string, string> = {
-    Europe: "Europa",
-    Asia: "Asien",
-    Africa: "Afrika",
-    "North America": "Nordamerika",
-    "South America": "Südamerika",
-    Oceania: "Ozeanien",
-    Antarctica: "Antarktis",
-  };
-  return map[c] || c;
 }

@@ -75,8 +75,7 @@ function HeroSection({ stats }: { stats: { posts: number; countries: number; tri
         </span>
       </div>
 
-      {/* Amber vertical line */}
-      <div className="absolute left-8 top-32 bottom-32 w-px bg-amber/30" />
+
 
       <div className="max-w-6xl mx-auto w-full text-center relative pt-4 pb-8 md:py-12">
         {/* Decorative background globe image */}
