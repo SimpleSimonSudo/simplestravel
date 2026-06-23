@@ -1,24 +1,26 @@
 import { createServerClient } from "@/lib/supabase";
 import ContentBlocksRenderer from "@/components/ContentBlocksRenderer";
-import countryExperiencesRaw from "@/lib/country_experiences.json";
 import { notFound } from "next/navigation";
-
-// Define the type for local country experience config
-interface CountryExperience {
-  experience?: string;
-  gdp?: string;
-  happiness_index?: string;
-  languages_share?: Record<string, string>;
-  religions_share?: Record<string, string>;
-}
-
-const countryExperiences: Record<string, CountryExperience> = countryExperiencesRaw;
+import { Country } from "@/lib/types";
 
 type Props = {
   params: Promise<{ code: string }>;
 };
 
 export const revalidate = 60; // Server cache for 60 seconds
+
+function formatGDP(gdpValue: any): string {
+  if (!gdpValue) return "N/A";
+  const num = parseFloat(gdpValue);
+  if (isNaN(num) || num <= 0) return gdpValue;
+  if (num >= 1e12) {
+    return `${(num / 1e12).toFixed(2)} Trillion USD`;
+  }
+  if (num >= 1e9) {
+    return `${(num / 1e9).toFixed(2)} Billion USD`;
+  }
+  return num.toLocaleString("en-GB");
+}
 
 export default async function CountryDetailPage({ params }: Props) {
   const { code } = await params;
@@ -36,7 +38,7 @@ export default async function CountryDetailPage({ params }: Props) {
     return notFound();
   }
 
-  const country = countryData as any;
+  const country = countryData as Country;
 
   // 2. Query REST Countries API matching by alpha_2 code to prevent mismatches
   let apiCountry: any = null;
@@ -64,8 +66,14 @@ export default async function CountryDetailPage({ params }: Props) {
     }
   }
 
-  // 3. Load local config data
-  const experienceData = countryExperiences[upperCode] || null;
+  // 3. Load database-backed experience data
+  const experienceData = {
+    experience: country.description,
+    gdp: country.gdp ? formatGDP(country.gdp) : null,
+    happiness_index: country.happiness_index ? `${country.happiness_index} / 10` : null,
+    languages_share: country.languages_share,
+    religions_share: country.religions_share,
+  };
 
   // 4. Fetch posts associated with this country in ascending order (oldest first)
   const { data: posts, error: postsError } = await supabase
@@ -96,11 +104,11 @@ export default async function CountryDetailPage({ params }: Props) {
   const postIds = countryPosts.map((p: any) => p.post_id);
   const { data: media } = postIds.length > 0
     ? await supabase
-        .from("media")
-        .select("*")
-        .in("post_id", postIds)
-        .order("block_index")
-        .order("display_order") as any
+      .from("media")
+      .select("*")
+      .in("post_id", postIds)
+      .order("block_index")
+      .order("display_order") as any
     : { data: [] };
 
   // Calculate visited dates and trip count
@@ -166,47 +174,30 @@ export default async function CountryDetailPage({ params }: Props) {
               <span className="overline text-dust">Country Profile</span>
             </div>
             <h1 className="font-display font-black text-4xl md:text-6xl text-ink leading-tight">
-              {country.name}.
+              {country.name}
             </h1>
             <p className="font-body text-dust text-sm md:text-base mt-2">
               {countryPosts.length} {countryPosts.length === 1 ? "entry" : "entries"}
               {uniqueTrips.length > 0 && ` across ${uniqueTrips.length} trip${uniqueTrips.length === 1 ? "" : "s"}`}
               {dateRangeStr && ` · Visited: ${dateRangeStr}`}
             </p>
-            {apiCountry?.links?.wikipedia && (
-              <div className="flex flex-wrap items-center gap-4 mt-3">
-                <a
-                  href={apiCountry.links.wikipedia}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-2xs uppercase tracking-widest text-dust hover:text-amber font-body border border-ink/10 px-3.5 py-1.5 rounded-full bg-white hover:border-amber/40 shadow-sm transition-all duration-300"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                  </svg>
-                  Wikipedia
-                </a>
-              </div>
-            )}
           </div>
         </header>
 
-        {/* Factsheet & Custom Distribution Grid */}
-        <section className="mb-16">
-          <Factsheet apiCountry={apiCountry} experienceData={experienceData} code={upperCode} />
-        </section>
-
         {/* Personal Experience Section */}
         {experienceData?.experience && (
-          <section className="mb-20 p-8 bg-cream/30 border border-cream rounded-sm max-w-4xl">
-            <span className="overline text-[10px] text-amber block mb-2 font-semibold">Personal Notes</span>
+          <section className="mb-12 p-8 bg-cream/30 border border-cream rounded-sm max-w-none animate-fade-in">
+            <span className="overline text-[10px] text-amber block mb-2 font-semibold">Quick Introduction</span>
             <p className="font-body text-ink/90 font-light leading-relaxed text-lg italic">
-              "{experienceData.experience}"
+              {experienceData.experience}
             </p>
           </section>
         )}
+
+        {/* Factsheet & Custom Distribution Grid */}
+        <section className="mb-16 animate-fade-in">
+          <Factsheet apiCountry={apiCountry} experienceData={experienceData} country={country} />
+        </section>
 
         {/* Timeline Posts Section */}
         <section className="border-t border-ink/10 pt-16">
@@ -398,14 +389,14 @@ function PieChart({ data }: { data: Record<string, string> }) {
 function Factsheet({
   apiCountry,
   experienceData,
-  code,
+  country,
 }: {
   apiCountry: any;
-  experienceData: CountryExperience | null;
-  code: string;
+  experienceData: any;
+  country: any;
 }) {
   const facts = [
-    { label: "Capital", value: apiCountry?.capitals?.[0]?.name || "N/A" },
+    { label: "Capital", value: country.capital || apiCountry?.capitals?.[0]?.name || "N/A" },
     {
       label: "Region",
       value: apiCountry?.region
@@ -414,13 +405,17 @@ function Factsheet({
     },
     {
       label: "Population",
-      value: apiCountry?.population ? apiCountry.population.toLocaleString("en-GB") : "N/A",
+      value: country.population
+        ? country.population.toLocaleString("en-GB")
+        : (apiCountry?.population ? apiCountry.population.toLocaleString("en-GB") : "N/A"),
     },
     {
       label: "Area",
-      value: apiCountry?.area?.kilometers
-        ? `${apiCountry.area.kilometers.toLocaleString("en-GB")} km²`
-        : "N/A",
+      value: country.area
+        ? `${country.area.toLocaleString("en-GB")} km²`
+        : (apiCountry?.area?.kilometers
+          ? `${apiCountry.area.kilometers.toLocaleString("en-GB")} km²`
+          : "N/A"),
     },
     {
       label: "Currency",
@@ -430,6 +425,10 @@ function Factsheet({
     },
     { label: "GDP", value: experienceData?.gdp || "N/A" },
     { label: "Happiness Index", value: experienceData?.happiness_index || "N/A" },
+    { label: "Time Zone", value: country.time_zone || apiCountry?.timezones?.[0] || "N/A" },
+    { label: "HDI", value: country.hdi ? String(country.hdi) : "N/A" },
+    { label: "Gini Index", value: country.gini ? String(country.gini) : "N/A" },
+    { label: "Minorities", value: country.minorities || "N/A" },
   ];
 
   const langShares = experienceData?.languages_share;
@@ -466,16 +465,36 @@ function Factsheet({
         {facts.map((fact) => (
           <div
             key={fact.label}
-            className="p-5 bg-white border border-ink/5 rounded-sm shadow-sm flex flex-col justify-between hover:border-amber/20 transition-all duration-300"
+            className="p-3.5 bg-white border border-ink/5 rounded-sm shadow-sm flex flex-col justify-between hover:border-amber/20 transition-all duration-300"
           >
             <span className="text-[10px] uppercase tracking-widest text-dust font-body">
               {fact.label}
             </span>
-            <span className="font-display font-bold text-sm md:text-base text-ink mt-3">
+            <span className="font-display font-bold text-sm text-ink mt-2">
               {fact.value}
             </span>
           </div>
         ))}
+        {apiCountry?.links?.wikipedia && (
+          <a
+            href={apiCountry.links.wikipedia}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-3.5 bg-cream/10 border border-ink/5 rounded-sm shadow-sm flex flex-col justify-between hover:border-amber/40 hover:bg-cream/20 transition-all duration-300 group"
+          >
+            <span className="text-[10px] uppercase tracking-widest text-dust font-body flex items-center justify-between">
+              External Link
+              <svg className="w-3 h-3 text-dust group-hover:text-amber transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </span>
+            <span className="font-display font-bold text-sm text-ink mt-2 group-hover:text-amber transition-colors">
+              Wikipedia Article →
+            </span>
+          </a>
+        )}
       </div>
 
       {/* Languages & Religions Distributions */}
@@ -511,16 +530,21 @@ function Factsheet({
         {/* Memberships section */}
         {memberships.length > 0 && (
           <div className="pt-6 border-t border-ink/5">
-            <h4 className="text-[10px] uppercase tracking-widest text-dust font-body mb-4 border-b border-ink/5 pb-1">
+            <h4 className="text-[10px] uppercase tracking-widest text-dust font-body mb-3 border-b border-ink/5 pb-1">
               Memberships
             </h4>
-            <div className="flex flex-wrap gap-1.5">
-              {memberships.map((org) => (
+            <div className="flex flex-wrap gap-x-2 gap-y-1">
+              {memberships.map((org, idx) => (
                 <span
                   key={org}
-                  className="text-3xs uppercase tracking-wider bg-cream text-ink font-semibold px-2 py-1 rounded-sm border border-ink/5 select-none"
+                  className="text-3xs uppercase tracking-wider text-dust/70 font-light select-none flex items-center"
                 >
                   {org}
+                  {idx < memberships.length - 1 && (
+                    <span className="text-dust/30 ml-2 select-none" aria-hidden="true">
+                      ·
+                    </span>
+                  )}
                 </span>
               ))}
             </div>

@@ -25,6 +25,7 @@ export default async function CountriesPage() {
 
   // Sortiere Kontinente alphabetisch
   const sortedContinents = Object.keys(grouped).sort();
+  const visitedPercentage = ((countries.length / 249) * 100).toFixed(1);
 
   return (
     <div className="min-h-screen bg-paper pb-24 pt-32 px-8 animate-fade-in">
@@ -33,12 +34,23 @@ export default async function CountriesPage() {
         <header className="mb-16 text-center md:text-left">
           <span className="overline block mb-3">World Map</span>
           <h1 className="font-display font-black text-5xl md:text-7xl text-ink mb-6">
-            Visited Countries.
+            Visited Countries
           </h1>
-          <p className="font-body text-dust text-sm md:text-base max-w-xl leading-relaxed">
-            A collection of all traveled continents and countries. 
-            A total of {countries.length} countries across {sortedContinents.length} continents have been visited so far.
-          </p>
+          <div className="font-body text-dust text-sm md:text-base leading-relaxed space-y-4 max-w-none">
+            <p>
+              I don't believe borders define people, and I don't identify strongly with countries.
+              They're simply the way people have chosen to divide and navigate this beautiful planet.
+            </p>
+            <p>
+              My hope is that these stories and impressions help you feel each place beyond the lines on a map.
+              At the same time, every country is far more diverse than any single journey can capture,
+              and every traveler experiences its people, culture, and landscapes in their own unique way.
+            </p>
+            <p>
+              A total of {countries.length} countries across {sortedContinents.length} continents have been visited so far.
+              This represents {visitedPercentage}% of the 249 countries and territories in the world.
+            </p>
+          </div>
         </header>
 
         {/* Continents & Countries */}

@@ -108,12 +108,21 @@ export interface Country {
   iso_code: string | null;
   iso_code_3: string | null;
   continent: string | null;
-  region: string | null;
-  post_count: number;
   first_visited: string | null;
   last_visited: string | null;
   description: string | null;
   notes: string | null;
+  capital: string | null;
+  area: number | null;
+  population: number | null;
+  time_zone: string | null;
+  happiness_index: number | null;
+  languages_share: Record<string, string> | null;
+  religions_share: Record<string, string> | null;
+  gdp: number | null;
+  minorities: string | null;
+  gini: number | null;
+  hdi: number | null;
   created_at: string;
   updated_at: string;
 }
