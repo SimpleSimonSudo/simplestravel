@@ -18,6 +18,7 @@ export default async function HomePage() {
       .select(`
         post_id,
         post_date,
+        actual_date,
         title,
         summary,
         city,
@@ -303,7 +304,7 @@ function RecentPostsSection({
         ) : (
           <div className="max-w-2xl mx-auto space-y-16">
             {posts.map((post: any, index: number) => {
-              const pDate = new Date(post.post_date);
+              const pDate = new Date(post.actual_date || post.post_date);
               const postCountry = post.country as any;
 
               return (

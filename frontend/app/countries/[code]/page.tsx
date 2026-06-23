@@ -81,6 +81,7 @@ export default async function CountryDetailPage({ params }: Props) {
     .select(`
       post_id,
       post_date,
+      actual_date,
       title,
       summary,
       city,
@@ -114,8 +115,8 @@ export default async function CountryDetailPage({ params }: Props) {
   // Calculate visited dates and trip count
   let dateRangeStr = "";
   if (countryPosts.length > 0) {
-    const firstDate = new Date(countryPosts[0].post_date);
-    const lastDate = new Date(countryPosts[countryPosts.length - 1].post_date);
+    const firstDate = new Date(countryPosts[0].actual_date || countryPosts[0].post_date);
+    const lastDate = new Date(countryPosts[countryPosts.length - 1].actual_date || countryPosts[countryPosts.length - 1].post_date);
     const fmt = (d: Date) => d.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
     if (fmt(firstDate) === fmt(lastDate)) {
       dateRangeStr = fmt(firstDate);
@@ -216,7 +217,7 @@ export default async function CountryDetailPage({ params }: Props) {
           ) : (
             <div className="max-w-2xl mx-auto space-y-20">
               {countryPosts.map((post: any, index: number) => {
-                const pDate = new Date(post.post_date);
+                const pDate = new Date(post.actual_date || post.post_date);
                 return (
                   <div key={post.post_id}>
                     <article className="space-y-6">

@@ -26,6 +26,7 @@ export default async function TripDetailPage({ params }: Props) {
       .select(`
         post_id,
         post_date,
+        actual_date,
         title,
         summary,
         city,
@@ -41,6 +42,7 @@ export default async function TripDetailPage({ params }: Props) {
       .select(`
         post_id,
         post_date,
+        actual_date,
         title,
         summary,
         city,

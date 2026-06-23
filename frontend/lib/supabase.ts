@@ -18,3 +18,14 @@ export function createServerClient() {
     auth: { persistSession: false },
   });
 }
+
+// Admin-side Client (um RLS zu umgehen, nur für Server-Aktionen/Mutations)
+export function createAdminClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is not defined in environment variables");
+  }
+  return createClient<any>(supabaseUrl, serviceKey, {
+    auth: { persistSession: false },
+  });
+}

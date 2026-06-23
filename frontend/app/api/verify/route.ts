@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,7 +10,7 @@ export async function POST(request: NextRequest) {
     const turnstileSecret = process.env.NODE_ENV === "development"
       ? "1x0000000000000000000000000000000AA"
       : process.env.TURNSTILE_SECRET_KEY;
-    if (turnstileSecret) {
+    if (turnstileSecret && flow !== "restore") {
       if (!turnstileToken) {
         return NextResponse.json(
           { success: false, message: "Bot verification token is missing." },
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
           body: `secret=${encodeURIComponent(turnstileSecret)}&response=${encodeURIComponent(turnstileToken)}`,
         }
       );
-      
+
       const verifyData = await verifyRes.json();
       if (!verifyData.success) {
         console.error("Turnstile verification failed. Secret:", turnstileSecret ? "Present" : "Missing", "Response:", verifyData);
@@ -39,77 +40,197 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Antworten überprüfen basierend auf dem gewählten Pfad
-    if (flow === "know_me") {
-      // Pfad A: Persönliche Fragen (Freunde & Familie)
-      const hometown = (answers.hometown || "").trim().toLowerCase();
-      const nickname = (answers.nickname || "").trim().toLowerCase();
-      const siblings = (answers.siblings || "").trim().toLowerCase();
+    const adminClient = createAdminClient();
+    let visitorId = "";
+    let displayName = "";
+    let recoveryCode = "";
+    let avatarId = "";
 
-      // Erwartete Antworten (case-insensitiv)
-      const isHometownCorrect = ["augsburg", "augsburgo", "stadtbergen", "86391"].includes(hometown);
-      const isNicknameCorrect = ["johy", "joi", "joy", "pieps"].includes(nickname);
-      const isSiblingsCorrect = ["three", "3", "drei"].includes(siblings);
-
-      if (!isHometownCorrect || !isNicknameCorrect || !isSiblingsCorrect) {
+    // 2. Profile Wiederherstellung (Restore Flow)
+    if (flow === "restore") {
+      const code = (answers.recoveryCode || "").trim();
+      if (!code) {
         return NextResponse.json(
-          { success: false, message: "Aww, those answers don't seem right. Please try again!" },
-          { status: 400 }
-        );
-      }
-    } else if (flow === "vibe_check") {
-      // Pfad B: Vibe Check (Respekt- & Verhaltens-Quiz)
-      // Wir erwarten exakte Antworten für Q1-Q4 (Single Choice) und Q5-Q6 (Multi Choice)
-      
-      const q1 = answers.q1; // Erwartet: "I try to understand it first." (Index 0)
-      const q2 = answers.q2; // Erwartet: "I'm curious." (Index 1)
-      const q3 = answers.q3; // Erwartet: "I pick up." (Index 2)
-      const q4 = answers.q4; // Erwartet: "I help bring the conversation back to them." (Index 0)
-      
-      const q5: number[] = answers.q5 || []; // Erwartet: [0, 3] ("We find something..." und "We'll split...")
-      const q6: number[] = answers.q6 || []; // Erwartet: [0, 1] ("I admit it..." und "I reflect...")
-
-      // Prüfe Q1-Q4
-      if (q1 !== 0 || q2 !== 1 || q3 !== 2 || q4 !== 0) {
-        return NextResponse.json(
-          { success: false, message: "Hmm, your vibes aren't quite matching our travel spirit. Let's try again!" },
+          { success: false, message: "Please enter a backup code." },
           { status: 400 }
         );
       }
 
-      // Prüfe Q5 & Q6 (Multi-choice) mit maximal 1 Fehler Toleranz insgesamt
-      const expectedQ5 = [0, 3];
-      const errorsQ5 =
-        expectedQ5.filter((x: number) => !q5.includes(x)).length +
-        q5.filter((x: number) => !expectedQ5.includes(x)).length;
+      // Normalize code: remove hyphens, spaces, and formatting characters
+      const cleanCode = code.replace(/[^0-9a-zA-Z]/g, "");
 
-      const expectedQ6 = [0, 1];
-      const errorsQ6 =
-        expectedQ6.filter((x: number) => !q6.includes(x)).length +
-        q6.filter((x: number) => !expectedQ6.includes(x)).length;
+      // If code consists of exactly 6 characters, reconstruct the standard format (XXX-XXX)
+      let queryCode = code;
+      if (cleanCode.length === 6) {
+        queryCode = `${cleanCode.slice(0, 3)}-${cleanCode.slice(3)}`;
+      }
 
-      const totalMultiErrors = errorsQ5 + errorsQ6;
+      // Suche nach dem Besucher
+      const { data: visitor, error: visitorErr } = await adminClient
+        .from("community_visitors")
+        .select("*")
+        .eq("recovery_code", queryCode)
+        .single();
 
-      if (totalMultiErrors > 1) {
+      if (visitorErr || !visitor) {
         return NextResponse.json(
-          { success: false, message: "Hmm, your choices didn't quite capture the respect we value. Try again!" },
-          { status: 400 }
+          { success: false, message: "Oh, cant't remember you. Try again or just sign up again." },
+          { status: 404 }
         );
       }
+
+      if (visitor.is_banned) {
+        return NextResponse.json(
+          { success: false, message: "This profile has been suspended." },
+          { status: 403 }
+        );
+      }
+
+      // Aktualisiere Aktivität
+      await adminClient
+        .from("community_visitors")
+        .update({
+          visit_count: (visitor.visit_count || 1) + 1,
+          last_active_at: new Date().toISOString()
+        })
+        .eq("visitor_id", visitor.visitor_id);
+
+      visitorId = visitor.visitor_id;
+      displayName = visitor.display_name;
+      recoveryCode = visitor.recovery_code;
+      avatarId = visitor.avatar_id || "avatar_1";
     } else {
-      return NextResponse.json(
-        { success: false, message: "Invalid authorization flow." },
-        { status: 400 }
-      );
+      // Normaler Quiz-Verifikations-Flow
+      const nickname = (answers.nickname || "").trim();
+      if (!nickname || nickname.length < 2 || nickname.length > 30) {
+        return NextResponse.json(
+          { success: false, message: "Please provide a nickname (2-30 characters)." },
+          { status: 400 }
+        );
+      }
+
+      if (flow === "know_me") {
+        // Pfad A: Persönliche Fragen (Freunde & Familie)
+        const hometown = (answers.hometown || "").trim().toLowerCase();
+        const girlfriendNickname = (answers.nickname_gf || "").trim().toLowerCase(); // renamed from 'nickname' to avoid conflict with visitor nickname
+        const siblings = (answers.siblings || "").trim().toLowerCase();
+
+        // Erwartete Antworten (case-insensitiv)
+        const isHometownCorrect = ["augsburg", "augsburgo", "stadtbergen", "86391"].includes(hometown);
+        const isNicknameCorrect = ["johy", "joi", "joy", "pieps"].includes(girlfriendNickname);
+        const isSiblingsCorrect = ["three", "3", "drei"].includes(siblings);
+
+        if (!isHometownCorrect || !isNicknameCorrect || !isSiblingsCorrect) {
+          return NextResponse.json(
+            { success: false, message: "Aww, those answers don't seem right. Please try again!" },
+            { status: 400 }
+          );
+        }
+      } else if (flow === "vibe_check") {
+        // Pfad B: Vibe Check (Respekt- & Verhaltens-Quiz)
+        const q1 = answers.q1;
+        const q2 = answers.q2;
+        const q3 = answers.q3;
+        const q4 = answers.q4;
+
+        const q5: number[] = answers.q5 || [];
+        const q6: number[] = answers.q6 || [];
+
+        if (q1 !== 0 || q2 !== 1 || q3 !== 2 || q4 !== 0) {
+          return NextResponse.json(
+            { success: false, message: "Hmm, your vibes aren't quite matching our travel spirit. Let's try again!" },
+            { status: 400 }
+          );
+        }
+
+        const expectedQ5 = [0, 3];
+        const errorsQ5 =
+          expectedQ5.filter((x: number) => !q5.includes(x)).length +
+          q5.filter((x: number) => !expectedQ5.includes(x)).length;
+
+        const expectedQ6 = [0, 1];
+        const errorsQ6 =
+          expectedQ6.filter((x: number) => !q6.includes(x)).length +
+          q6.filter((x: number) => !expectedQ6.includes(x)).length;
+
+        const totalMultiErrors = errorsQ5 + errorsQ6;
+
+        if (totalMultiErrors > 1) {
+          return NextResponse.json(
+            { success: false, message: "Hmm, your choices didn't quite capture the respect we value. Try again!" },
+            { status: 400 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { success: false, message: "Invalid authorization flow." },
+          { status: 400 }
+        );
+      }
+
+      // Neues Profil erstellen
+      displayName = nickname;
+
+      // Eindeutigen Recovery Code generieren (Format: XXX-XXX)
+      let codeExists = true;
+      while (codeExists) {
+        recoveryCode = `${Math.floor(100 + Math.random() * 900)}-${Math.floor(100 + Math.random() * 900)}`;
+        const { count } = await adminClient
+          .from("community_visitors")
+          .select("visitor_id", { count: "exact", head: true })
+          .eq("recovery_code", recoveryCode);
+        if (count === 0) {
+          codeExists = false;
+        }
+      }
+
+      const randomAvatarId = `avatar_${Math.floor(1 + Math.random() * 15)}`;
+      // Besucher eintragen
+      const { data: newVisitor, error: insertErr } = await adminClient
+        .from("community_visitors")
+        .insert({
+          display_name: displayName,
+          recovery_code: recoveryCode,
+          visit_count: 1,
+          avatar_id: randomAvatarId
+        })
+        .select()
+        .single();
+
+      if (insertErr || !newVisitor) {
+        console.error("Error creating visitor profile:", insertErr);
+        return NextResponse.json(
+          { success: false, message: "Error creating your profile. Please try again." },
+          { status: 500 }
+        );
+      }
+
+      visitorId = newVisitor.visitor_id;
+      avatarId = newVisitor.avatar_id;
     }
 
-    // 3. Cookie setzen (Gültigkeit: 10 Jahre)
+    // 3. Cookies setzen (Gültigkeit: 10 Jahre)
     const sessionSecret = process.env.SESSION_SECRET || "default_session_secret_key_123";
-    const response = NextResponse.json({ success: true });
-    
+    const response = NextResponse.json({
+      success: true,
+      nickname: displayName,
+      recoveryCode: recoveryCode,
+      avatarId: avatarId
+    });
+
+    // travel_session Cookie (für Middleware)
     response.cookies.set("travel_session", sessionSecret, {
       path: "/",
-      maxAge: 60 * 60 * 24 * 365 * 10, // 10 Jahre
+      maxAge: 60 * 60 * 24 * 365 * 10,
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+    });
+
+    // visitor_profile Cookie (für API-Verifikation)
+    response.cookies.set("visitor_profile", visitorId, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365 * 10,
       httpOnly: true,
       secure: true,
       sameSite: "strict",

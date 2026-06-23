@@ -59,7 +59,7 @@ export default function TripContent({ posts, fullPosts, media }: TripContentProp
         {viewMode === "journal" && (
           <div key="journal-view" className="animate-fade-in max-w-2xl mx-auto space-y-16">
             {fullPosts.map((post: any, index: number) => {
-              const pDate = new Date(post.post_date);
+              const pDate = new Date(post.actual_date || post.post_date);
               const postCountry = post.country as any;
 
               return (
@@ -139,7 +139,7 @@ export default function TripContent({ posts, fullPosts, media }: TripContentProp
         {viewMode === "timeline" && (
           <div key="timeline-view" className="animate-fade-in relative border-l border-ink/10 pl-6 ml-4 space-y-12 py-4">
             {posts.map((post: any, index: number) => {
-              const pDate = new Date(post.post_date);
+              const pDate = new Date(post.actual_date || post.post_date);
               const postCountry = post.country as any;
 
               return (

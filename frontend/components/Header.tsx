@@ -29,6 +29,7 @@ export default function Header() {
           <NavLink href="/">Journal</NavLink>
           <NavLink href="/countries">Countries</NavLink>
           <NavLink href="/map">Map</NavLink>
+          <NavLink href="/community">Community</NavLink>
         </nav>
 
         {/* Mobile menu toggle button */}
@@ -60,6 +61,7 @@ export default function Header() {
           <NavLink href="/" onClick={() => setIsOpen(false)}>Journal</NavLink>
           <NavLink href="/countries" onClick={() => setIsOpen(false)}>Countries</NavLink>
           <NavLink href="/map" onClick={() => setIsOpen(false)}>Map</NavLink>
+          <NavLink href="/community" onClick={() => setIsOpen(false)}>Community</NavLink>
         </div>
       )}
     </header>

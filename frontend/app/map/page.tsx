@@ -1,4 +1,5 @@
 import { createServerClient } from "@/lib/supabase";
+import { getCountriesWithStats } from "@/lib/queries";
 import MapClient from "./MapClient";
 
 export const revalidate = 60;
@@ -12,6 +13,7 @@ export default async function MapPage() {
     .select(`
       post_id,
       post_date,
+      actual_date,
       title,
       summary,
       latitude,
@@ -27,9 +29,17 @@ export default async function MapPage() {
     console.error("Error loading map coordinates:", error);
   }
 
+  let visitedCountries: any[] = [];
+  try {
+    visitedCountries = await getCountriesWithStats();
+  } catch (err) {
+    console.error("Error loading visited countries with stats:", err);
+  }
+
   const mappedPosts = (posts ?? []).map((post: any) => ({
     post_id: post.post_id,
     post_date: post.post_date,
+    actual_date: post.actual_date,
     title: post.title,
     summary: post.summary,
     latitude: Number(post.latitude),
@@ -41,8 +51,8 @@ export default async function MapPage() {
 
   return (
     <div className="relative w-full h-screen bg-cream overflow-hidden">
-      {/* Client Component für Leaflet */}
-      <MapClient posts={mappedPosts} />
+      {/* Client Component für MapLibre */}
+      <MapClient posts={mappedPosts} visitedCountries={visitedCountries} />
     </div>
   );
 }

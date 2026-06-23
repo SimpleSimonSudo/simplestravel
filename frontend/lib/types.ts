@@ -11,6 +11,11 @@ export interface Database {
       trips: { Row: Trip; Insert: TripInsert; Update: Partial<TripInsert> };
       trip_countries: { Row: TripCountry; Insert: TripCountryInsert; Update: Partial<TripCountryInsert> };
       content_blocks: { Row: ContentBlock; Insert: ContentBlockInsert; Update: Partial<ContentBlockInsert> };
+      community_visitors: { Row: CommunityVisitor; Insert: CommunityVisitorInsert; Update: Partial<CommunityVisitorInsert> };
+      community_boards: { Row: CommunityBoard; Insert: CommunityBoardInsert; Update: Partial<CommunityBoardInsert> };
+      community_impulses: { Row: CommunityImpulse; Insert: CommunityImpulseInsert; Update: Partial<CommunityImpulseInsert> };
+      community_replies: { Row: CommunityReply; Insert: CommunityReplyInsert; Update: Partial<CommunityReplyInsert> };
+      community_reactions: { Row: CommunityReaction; Insert: CommunityReactionInsert; Update: Partial<CommunityReactionInsert> };
     };
     Views: {
       timeline: { Row: TimelineRow };
@@ -28,6 +33,7 @@ export interface Database {
 export interface Post {
   post_id: string;
   post_date: string;
+  actual_date: string;
   created_at: string;
   updated_at: string;
   tumblr_timestamp: number | null;
@@ -205,6 +211,7 @@ export type ContentBlockInsert = Omit<ContentBlock, "block_id" | "created_at">;
 export interface TimelineRow {
   post_id: string;
   post_date: string;
+  actual_date: string;
   title: string | null;
   summary: string | null;
   country: string | null;
@@ -268,4 +275,96 @@ export interface ExifData {
   Altitude?: number;
   Latitude?: number;
   Longitude?: number;
+}
+
+// ────────────────────────────────────────────────────────────
+// COMMUNITY FEATURES
+// ────────────────────────────────────────────────────────────
+
+export interface CommunityVisitor {
+  visitor_id: string;
+  display_name: string;
+  recovery_code: string;
+  visit_count: number;
+  is_banned: boolean;
+  last_active_at: string;
+  created_at: string;
+}
+
+export interface CommunityVisitorInsert {
+  visitor_id?: string;
+  display_name: string;
+  recovery_code: string;
+  visit_count?: number;
+  is_banned?: boolean;
+  last_active_at?: string;
+  created_at?: string;
+}
+
+export interface CommunityBoard {
+  board_id: string;
+  name: string;
+  description: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface CommunityBoardInsert {
+  board_id?: string;
+  name: string;
+  description?: string | null;
+  created_by?: string | null;
+  created_at?: string;
+}
+
+export interface CommunityImpulse {
+  impulse_id: string;
+  board_id: string;
+  visitor_id: string;
+  content: string;
+  post_id: string | null;
+  country_id: number | null;
+  created_at: string;
+}
+
+export interface CommunityImpulseInsert {
+  impulse_id?: string;
+  board_id: string;
+  visitor_id: string;
+  content: string;
+  post_id?: string | null;
+  country_id?: number | null;
+  created_at?: string;
+}
+
+export interface CommunityReply {
+  reply_id: string;
+  impulse_id: string;
+  visitor_id: string;
+  content: string;
+  created_at: string;
+}
+
+export interface CommunityReplyInsert {
+  reply_id?: string;
+  impulse_id: string;
+  visitor_id: string;
+  content: string;
+  created_at?: string;
+}
+
+export interface CommunityReaction {
+  reaction_id: string;
+  impulse_id: string;
+  visitor_id: string;
+  reaction_type: "heart" | "sparkles" | "globe" | "funny" | "applause" | "rocket" | "camera";
+  created_at: string;
+}
+
+export interface CommunityReactionInsert {
+  reaction_id?: string;
+  impulse_id: string;
+  visitor_id: string;
+  reaction_type: "heart" | "sparkles" | "globe" | "funny" | "applause" | "rocket" | "camera";
+  created_at?: string;
 }

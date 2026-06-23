@@ -3,13 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 
 export default function GatePage() {
-  // Flows: "select" (initial screen), "know_me" (personal quiz), "vibe_check" (respect quiz)
-  const [flow, setFlow] = useState<"select" | "know_me" | "vibe_check">("select");
+  // Flows: "select" (initial screen), "know_me" (personal quiz), "vibe_check" (respect quiz), "restore" (recovery)
+  const [flow, setFlow] = useState<"select" | "know_me" | "vibe_check" | "restore">("select");
+
+  // Visitor nickname (for Community)
+  const [visitorNickname, setVisitorNickname] = useState("");
+
+  // Recovery code input (for Restore flow)
+  const [recoveryCode, setRecoveryCode] = useState("");
 
   // States for Personal Quiz
   const [personalAnswers, setPersonalAnswers] = useState({
     hometown: "",
-    nickname: "",
+    nickname_gf: "", // Nickname of the girlfriend (riddle answer)
     siblings: "",
   });
 
@@ -28,6 +34,9 @@ export default function GatePage() {
 
   // Render Turnstile Captcha
   const renderTurnstile = () => {
+    // Only render turnstile for verification flows (not restore)
+    if (flow === "restore") return;
+
     const L = (window as any).turnstile;
     const siteKey = process.env.NODE_ENV === "development"
       ? "1x00000000000000000000AA"
@@ -93,7 +102,7 @@ export default function GatePage() {
     document.head.appendChild(script);
 
     (window as any).onloadTurnstileCallback = () => {
-      if (flow !== "select") {
+      if (flow !== "select" && flow !== "restore") {
         renderTurnstile();
       }
     };
@@ -108,7 +117,7 @@ export default function GatePage() {
 
   // Render Turnstile whenever we switch flows to sub-forms
   useEffect(() => {
-    if (flow !== "select" && (window as any).turnstile) {
+    if (flow !== "select" && flow !== "restore" && (window as any).turnstile) {
       // Delay slightly to ensure ref is mounted
       const timer = setTimeout(renderTurnstile, 50);
       return () => clearTimeout(timer);
@@ -145,7 +154,9 @@ export default function GatePage() {
   const handleBack = () => {
     setFlow("select");
     setError(null);
-    setPersonalAnswers({ hometown: "", nickname: "", siblings: "" });
+    setVisitorNickname("");
+    setRecoveryCode("");
+    setPersonalAnswers({ hometown: "", nickname_gf: "", siblings: "" });
     setSingleAnswers({});
     setMultiAnswers({ q5: [], q6: [] });
     setTurnstileToken("");
@@ -156,37 +167,55 @@ export default function GatePage() {
     setError(null);
     setLoading(true);
 
-    let payloadAnswers = {};
+    let payloadAnswers: Record<string, any> = {};
 
-    if (flow === "know_me") {
-      const { hometown, nickname, siblings } = personalAnswers;
-      if (!hometown.trim() || !nickname.trim() || !siblings.trim()) {
-        setError("Just a couple more answers to go");
+    if (flow === "restore") {
+      if (!recoveryCode.trim()) {
+        setError("Please enter your backup code");
         setLoading(false);
         return;
       }
-      payloadAnswers = personalAnswers;
+      payloadAnswers = { recoveryCode: recoveryCode.trim() };
     } else {
-      // Vibe Check
-      const { q1, q2, q3, q4 } = singleAnswers;
-      if (q1 === undefined || q2 === undefined || q3 === undefined || q4 === undefined) {
-        setError("Just a couple more answers to go");
+      // Validation nickname for other flows
+      if (!visitorNickname.trim() || visitorNickname.trim().length < 2) {
+        setError("Please choose a nickname (at least 2 characters)");
         setLoading(false);
         return;
       }
-      if (multiAnswers.q5.length === 0 || multiAnswers.q6.length === 0) {
-        setError("Just a couple more answers to go");
-        setLoading(false);
-        return;
+
+      payloadAnswers.nickname = visitorNickname.trim();
+
+      if (flow === "know_me") {
+        const { hometown, nickname_gf, siblings } = personalAnswers;
+        if (!hometown.trim() || !nickname_gf.trim() || !siblings.trim()) {
+          setError("Just a couple more answers to go");
+          setLoading(false);
+          return;
+        }
+        payloadAnswers.hometown = hometown;
+        payloadAnswers.nickname_gf = nickname_gf;
+        payloadAnswers.siblings = siblings;
+      } else {
+        // Vibe Check
+        const { q1, q2, q3, q4 } = singleAnswers;
+        if (q1 === undefined || q2 === undefined || q3 === undefined || q4 === undefined) {
+          setError("Just a couple more answers to go");
+          setLoading(false);
+          return;
+        }
+        if (multiAnswers.q5.length === 0 || multiAnswers.q6.length === 0) {
+          setError("Just a couple more answers to go");
+          setLoading(false);
+          return;
+        }
+        payloadAnswers.q1 = q1;
+        payloadAnswers.q2 = q2;
+        payloadAnswers.q3 = q3;
+        payloadAnswers.q4 = q4;
+        payloadAnswers.q5 = multiAnswers.q5;
+        payloadAnswers.q6 = multiAnswers.q6;
       }
-      payloadAnswers = {
-        q1,
-        q2,
-        q3,
-        q4,
-        q5: multiAnswers.q5,
-        q6: multiAnswers.q6,
-      };
     }
 
     try {
@@ -196,7 +225,7 @@ export default function GatePage() {
         body: JSON.stringify({
           flow,
           answers: payloadAnswers,
-          turnstileToken,
+          turnstileToken: flow === "restore" ? undefined : turnstileToken,
         }),
       });
 
@@ -205,11 +234,20 @@ export default function GatePage() {
         setError(data.message || "Aww, something went wrong.");
         setLoading(false);
 
-        if ((window as any).turnstile && turnstileWidgetId.current !== null) {
+        if (flow !== "restore" && (window as any).turnstile && turnstileWidgetId.current !== null) {
           (window as any).turnstile.reset(turnstileWidgetId.current);
           setTurnstileToken("");
         }
         return;
+      }
+
+      // Save display name & recovery code to localStorage so Community page can easily display profile configs
+      if (data.nickname && data.recoveryCode) {
+        localStorage.setItem("travel_display_name", data.nickname);
+        localStorage.setItem("travel_recovery_code", data.recoveryCode);
+        if (data.avatarId) {
+          localStorage.setItem("travel_avatar_id", data.avatarId);
+        }
       }
 
       // Success: redirect to homepage
@@ -245,7 +283,7 @@ export default function GatePage() {
 
             <h2 className="font-display text-xl text-ink font-semibold mb-6">Do you know me?</h2>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-xs mx-auto">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-xs mx-auto mb-8">
               <button
                 onClick={() => setFlow("know_me")}
                 className="flex-1 py-3 px-6 bg-ink text-cream hover:bg-amber hover:text-white font-body text-xs font-bold uppercase tracking-widest transition-all duration-300 rounded-sm shadow-sm"
@@ -259,6 +297,13 @@ export default function GatePage() {
                 Not so well
               </button>
             </div>
+
+            <button
+              onClick={() => setFlow("restore")}
+              className="text-3xs uppercase tracking-widest text-dust hover:text-amber transition-colors font-body inline-block"
+            >
+              Already verified? Restore profile
+            </button>
           </div>
         ) : (
           <div>
@@ -277,10 +322,10 @@ export default function GatePage() {
 
             <div className="text-center mb-8">
               <span className="overline text-2xs mb-2">
-                {flow === "know_me" ? "Personal Check" : "Respect & Vibe Check"}
+                {flow === "know_me" ? "Personal Check" : flow === "restore" ? "Recovery" : "Respect & Vibe Check"}
               </span>
               <h1 className="font-display font-bold text-2xl text-ink">
-                {flow === "know_me" ? "Family & Friends" : "Vibe Check"}
+                {flow === "know_me" ? "Family & Friends" : flow === "restore" ? "Restore Profile" : "Vibe Check"}
               </h1>
               <div className="amber-line mx-auto mt-3"></div>
             </div>
@@ -292,6 +337,49 @@ export default function GatePage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Profile Restoration */}
+              {flow === "restore" && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="recoveryCode" className="block text-xs font-semibold text-ink font-body">
+                      Enter backup code (e.g. 182-392)
+                    </label>
+                    <input
+                      type="text"
+                      id="recoveryCode"
+                      value={recoveryCode}
+                      onChange={(e) => setRecoveryCode(e.target.value)}
+                      autoComplete="off"
+                      disabled={loading}
+                      placeholder="XXX-XXX"
+                      className="w-full px-4 py-2.5 bg-cream/20 border border-ink/10 rounded-sm text-sm font-body text-ink focus:outline-none focus:border-amber/50 transition-colors text-center font-mono tracking-widest"
+                    />
+                  </div>
+                  <p className="text-3xs text-dust leading-normal font-body text-center max-w-xs mx-auto">
+                    This restores your previous profile nickname and settings without running through the riddle again.
+                  </p>
+                </div>
+              )}
+
+              {/* Quiz Flows: Common Nickname input */}
+              {flow !== "restore" && (
+                <div className="space-y-2 pb-2 border-b border-ink/5">
+                  <label htmlFor="visitorNickname" className="block text-xs font-semibold text-ink font-body">
+                    Choose a display name
+                  </label>
+                  <input
+                    type="text"
+                    id="visitorNickname"
+                    value={visitorNickname}
+                    onChange={(e) => setVisitorNickname(e.target.value)}
+                    autoComplete="off"
+                    disabled={loading}
+                    className="w-full px-4 py-2.5 bg-cream/20 border border-ink/10 rounded-sm text-sm font-body text-ink focus:outline-none focus:border-amber/50 transition-colors"
+                    placeholder="E.g., Thomas S. (displayed on community posts)"
+                  />
+                </div>
+              )}
+
               {/* FLOW 1: KNOW ME (Personal Riddle) */}
               {flow === "know_me" && (
                 <div className="space-y-5">
@@ -311,14 +399,14 @@ export default function GatePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="nickname" className="block text-xs font-semibold text-ink font-body">
+                    <label htmlFor="nickname_gf" className="block text-xs font-semibold text-ink font-body">
                       What’s the nickname I use for my girlfriend?
                     </label>
                     <input
                       type="text"
-                      id="nickname"
-                      value={personalAnswers.nickname}
-                      onChange={(e) => handlePersonalChange("nickname", e.target.value)}
+                      id="nickname_gf"
+                      value={personalAnswers.nickname_gf}
+                      onChange={(e) => handlePersonalChange("nickname_gf", e.target.value)}
                       autoComplete="off"
                       disabled={loading}
                       className="w-full px-4 py-2.5 bg-cream/20 border border-ink/10 rounded-sm text-sm font-body text-ink focus:outline-none focus:border-amber/50 transition-colors"
@@ -345,7 +433,7 @@ export default function GatePage() {
 
               {/* FLOW 2: VIBE CHECK */}
               {flow === "vibe_check" && (
-                <div className="space-y-6 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-6 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
                   {/* Q1 */}
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-ink font-body">
@@ -508,17 +596,19 @@ export default function GatePage() {
               )}
 
               {/* Turnstile Captcha Widget */}
-              <div className="flex justify-center my-6">
-                <div ref={turnstileRef} className="cf-turnstile"></div>
-              </div>
+              {flow !== "restore" && (
+                <div className="flex justify-center my-6">
+                  <div ref={turnstileRef} className="cf-turnstile"></div>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || !turnstileToken}
+                disabled={loading || (flow !== "restore" && !turnstileToken)}
                 className="w-full py-3 bg-ink text-cream hover:bg-amber hover:text-white disabled:bg-dust/40 disabled:text-cream font-body text-xs font-bold uppercase tracking-widest transition-all duration-300 rounded-sm shadow-sm"
               >
-                {loading ? "Verifying..." : "Let Me In"}
+                {loading ? "Processing..." : flow === "restore" ? "Restore My Profile" : "Let Me In"}
               </button>
             </form>
           </div>

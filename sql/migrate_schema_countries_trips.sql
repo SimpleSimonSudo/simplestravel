@@ -26,10 +26,21 @@ CREATE TABLE IF NOT EXISTS countries (
     
     -- Geografische Info
     continent TEXT,  -- 'Europe', 'Asia', etc.
-    region TEXT,  -- 'Southern Europe', 'Balkans', etc.
+    capital TEXT,
+    area DOUBLE PRECISION,
+    population BIGINT,
+    time_zone TEXT,
+    
+    -- Metriken & Anteile
+    happiness_index DOUBLE PRECISION,
+    languages_share JSONB,
+    religions_share JSONB,
+    gdp DOUBLE PRECISION,
+    minorities TEXT,
+    gini DOUBLE PRECISION,
+    hdi DOUBLE PRECISION,
     
     -- Statistiken (automatisch berechnet)
-    post_count INTEGER DEFAULT 0,
     first_visited DATE,
     last_visited DATE,
     
@@ -271,14 +282,8 @@ GROUP BY c.country_id;
 CREATE OR REPLACE FUNCTION update_country_stats()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Update post_count für betroffenes Land
     UPDATE countries
     SET 
-        post_count = (
-            SELECT COUNT(*) 
-            FROM posts 
-            WHERE country_id = NEW.country_id
-        ),
         first_visited = (
             SELECT MIN(post_date::DATE) 
             FROM posts 

@@ -26,7 +26,7 @@ export default async function PostDetailPage({ params }: Props) {
   }
 
   const { post, media } = postData as any;
-  const date = new Date(post.post_date);
+  const date = new Date(post.actual_date || post.post_date);
 
   // Finde das Hero-Bild:
   // - Wenn der Blogpost Hochformat- und Querformat-Bilder enthält, wähle das querste Bild.

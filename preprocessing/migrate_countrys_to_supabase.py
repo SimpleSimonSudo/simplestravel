@@ -35,6 +35,8 @@ COUNTRY_CORRECTIONS = {
     "Tunesia":     "Tunisia",
     "Srilanka":    "Sri Lanka",
     "Macedonia":   "North Macedonia",
+    "Lichtenstein": "Liechtenstein",
+    "Marocco":      "Morocco",
 }
 
 TRIP_CORRECTIONS = {
@@ -90,6 +92,21 @@ COUNTRY_ISO = {
     "Serbia":                 ("RS", "Europe"),
     "North Macedonia":        ("MK", "Europe"),
     "Greece":                 ("GR", "Europe"),
+    "Great Britain":          ("GB", "Europe"),
+    "Cuba":                   ("CU", "North America"),
+    "Liechtenstein":          ("LI", "Europe"),
+    "Turkey":                 ("TR", "Europe"),
+    "Palestine":              ("PS", "Asia"),
+    "Netherlands":            ("NL", "Europe"),
+    "Dominican Republic":     ("DO", "North America"),
+    "Slovenia":               ("SI", "Europe"),
+    "Morocco":                ("MA", "Africa"),
+    "Czech Republic":         ("CZ", "Europe"),
+    "Poland":                 ("PL", "Europe"),
+    "Switzerland":            ("CH", "Europe"),
+    "Monaco":                 ("MC", "Europe"),
+    "Vatican City":           ("VA", "Europe"),
+    "Belgium":                ("BE", "Europe"),
 }
 
 # ============================================================================
