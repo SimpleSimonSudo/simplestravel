@@ -215,7 +215,8 @@ export async function POST(request: NextRequest) {
       success: true,
       nickname: displayName,
       recoveryCode: recoveryCode,
-      avatarId: avatarId
+      avatarId: avatarId,
+      visitorId: visitorId
     });
 
     // travel_session Cookie (für Middleware)

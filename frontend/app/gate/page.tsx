@@ -248,6 +248,9 @@ export default function GatePage() {
         if (data.avatarId) {
           localStorage.setItem("travel_avatar_id", data.avatarId);
         }
+        if (data.visitorId) {
+          localStorage.setItem("travel_visitor_id", data.visitorId);
+        }
       }
 
       // Success: redirect to homepage

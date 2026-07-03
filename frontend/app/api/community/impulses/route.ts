@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
         reply_count: impulse.community_replies ? impulse.community_replies.length : 0,
         reactions: reactionsCount,
         user_reactions: userReactions,
+        updated_at: impulse.updated_at || null,
       };
     });
 
@@ -180,11 +181,120 @@ export async function POST(request: NextRequest) {
       reply_count: 0,
       reactions: { heart: 0, sparkles: 0, globe: 0, funny: 0, applause: 0, rocket: 0, camera: 0 },
       user_reactions: [],
+      updated_at: inserted.updated_at || null,
     };
 
     return NextResponse.json({ success: true, impulse: formatted });
   } catch (error) {
     console.error("Error in impulses POST endpoint:", error);
+    return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const visitorId = request.cookies.get("visitor_profile")?.value;
+    if (!visitorId) {
+      return NextResponse.json({ success: false, message: "Please verify your profile first." }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { impulse_id, content } = body;
+
+    if (!impulse_id) {
+      return NextResponse.json({ success: false, message: "Missing impulse_id." }, { status: 400 });
+    }
+
+    const trimmedContent = (content || "").trim();
+    if (!trimmedContent || trimmedContent.length < 3 || trimmedContent.length > 3000) {
+      return NextResponse.json({ success: false, message: "Impulse text must be between 3 and 3000 characters." }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    // Fetch the impulse to verify ownership
+    const { data: impulse, error: fetchErr } = await adminClient
+      .from("community_impulses")
+      .select("visitor_id")
+      .eq("impulse_id", impulse_id)
+      .single();
+
+    if (fetchErr || !impulse) {
+      return NextResponse.json({ success: false, message: "Impulse not found." }, { status: 404 });
+    }
+
+    if (impulse.visitor_id !== visitorId) {
+      return NextResponse.json({ success: false, message: "You are not authorized to edit this impulse." }, { status: 403 });
+    }
+
+    // Update impulse
+    const { data: updated, error: updateErr } = await adminClient
+      .from("community_impulses")
+      .update({
+        content: trimmedContent,
+        updated_at: new Date().toISOString()
+      })
+      .eq("impulse_id", impulse_id)
+      .select()
+      .single();
+
+    if (updateErr || !updated) {
+      console.error("Error updating impulse:", updateErr);
+      return NextResponse.json({ success: false, message: "Error updating your impulse. Please try again." }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, content: updated.content, updated_at: updated.updated_at });
+  } catch (error) {
+    console.error("Error in impulses PATCH endpoint:", error);
+    return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const visitorId = request.cookies.get("visitor_profile")?.value;
+    if (!visitorId) {
+      return NextResponse.json({ success: false, message: "Please verify your profile first." }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const impulseId = searchParams.get("impulse_id");
+
+    if (!impulseId) {
+      return NextResponse.json({ success: false, message: "Missing impulse_id." }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    // Fetch the impulse to verify ownership
+    const { data: impulse, error: fetchErr } = await adminClient
+      .from("community_impulses")
+      .select("visitor_id")
+      .eq("impulse_id", impulseId)
+      .single();
+
+    if (fetchErr || !impulse) {
+      return NextResponse.json({ success: false, message: "Impulse not found." }, { status: 404 });
+    }
+
+    if (impulse.visitor_id !== visitorId) {
+      return NextResponse.json({ success: false, message: "You are not authorized to delete this impulse." }, { status: 403 });
+    }
+
+    // Delete impulse
+    const { error: deleteErr } = await adminClient
+      .from("community_impulses")
+      .delete()
+      .eq("impulse_id", impulseId);
+
+    if (deleteErr) {
+      console.error("Error deleting impulse:", deleteErr);
+      return NextResponse.json({ success: false, message: "Error deleting impulse. Please try again." }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error in impulses DELETE endpoint:", error);
     return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
   }
 }

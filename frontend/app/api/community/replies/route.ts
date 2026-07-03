@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
       impulse_id: reply.impulse_id,
       content: reply.content,
       created_at: reply.created_at,
+      updated_at: reply.updated_at || null,
       visitor: {
         visitor_id: reply.community_visitors.visitor_id,
         display_name: reply.community_visitors.display_name,
@@ -128,6 +129,7 @@ export async function POST(request: NextRequest) {
       impulse_id: inserted.impulse_id,
       content: inserted.content,
       created_at: inserted.created_at,
+      updated_at: inserted.updated_at || null,
       visitor: {
         visitor_id: inserted.community_visitors.visitor_id,
         display_name: inserted.community_visitors.display_name,
@@ -138,6 +140,114 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, reply: formatted });
   } catch (error) {
     console.error("Error in replies POST endpoint:", error);
+    return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const visitorId = request.cookies.get("visitor_profile")?.value;
+    if (!visitorId) {
+      return NextResponse.json({ success: false, message: "Please verify your profile first." }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { reply_id, content } = body;
+
+    if (!reply_id) {
+      return NextResponse.json({ success: false, message: "Missing reply_id." }, { status: 400 });
+    }
+
+    const trimmedContent = (content || "").trim();
+    if (!trimmedContent || trimmedContent.length < 1 || trimmedContent.length > 200) {
+      return NextResponse.json({ success: false, message: "Reply text must be between 1 and 200 characters." }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    // Fetch the reply to verify ownership
+    const { data: reply, error: fetchErr } = await adminClient
+      .from("community_replies")
+      .select("visitor_id")
+      .eq("reply_id", reply_id)
+      .single();
+
+    if (fetchErr || !reply) {
+      return NextResponse.json({ success: false, message: "Comment not found." }, { status: 404 });
+    }
+
+    if (reply.visitor_id !== visitorId) {
+      return NextResponse.json({ success: false, message: "You are not authorized to edit this comment." }, { status: 403 });
+    }
+
+    // Update reply
+    const { data: updated, error: updateErr } = await adminClient
+      .from("community_replies")
+      .update({
+        content: trimmedContent,
+        updated_at: new Date().toISOString()
+      })
+      .eq("reply_id", reply_id)
+      .select()
+      .single();
+
+    if (updateErr || !updated) {
+      console.error("Error updating reply:", updateErr);
+      return NextResponse.json({ success: false, message: "Error updating your comment. Please try again." }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, content: updated.content, updated_at: updated.updated_at });
+  } catch (error) {
+    console.error("Error in replies PATCH endpoint:", error);
+    return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const visitorId = request.cookies.get("visitor_profile")?.value;
+    if (!visitorId) {
+      return NextResponse.json({ success: false, message: "Please verify your profile first." }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const replyId = searchParams.get("reply_id");
+
+    if (!replyId) {
+      return NextResponse.json({ success: false, message: "Missing reply_id." }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    // Fetch the reply to verify ownership
+    const { data: reply, error: fetchErr } = await adminClient
+      .from("community_replies")
+      .select("visitor_id")
+      .eq("reply_id", replyId)
+      .single();
+
+    if (fetchErr || !reply) {
+      return NextResponse.json({ success: false, message: "Comment not found." }, { status: 404 });
+    }
+
+    if (reply.visitor_id !== visitorId) {
+      return NextResponse.json({ success: false, message: "You are not authorized to delete this comment." }, { status: 403 });
+    }
+
+    // Delete reply
+    const { error: deleteErr } = await adminClient
+      .from("community_replies")
+      .delete()
+      .eq("reply_id", replyId);
+
+    if (deleteErr) {
+      console.error("Error deleting reply:", deleteErr);
+      return NextResponse.json({ success: false, message: "Error deleting comment. Please try again." }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error in replies DELETE endpoint:", error);
     return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
   }
 }

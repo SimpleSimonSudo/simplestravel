@@ -337,6 +337,7 @@ interface Impulse {
   board_id: string;
   content: string;
   created_at: string;
+  updated_at?: string | null;
   visitor: Visitor;
   post: { post_id: string; title: string | null } | null;
   country: { country_id: number; name: string; iso_code: string | null } | null;
@@ -350,6 +351,7 @@ interface Reply {
   impulse_id: string;
   content: string;
   created_at: string;
+  updated_at?: string | null;
   visitor: Visitor;
 }
 
@@ -370,6 +372,15 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
   const [recoveryCode, setRecoveryCode] = useState("");
   const [avatarId, setAvatarId] = useState("avatar_1");
   const [openSettings, setOpenSettings] = useState(false);
+
+  // Edit & Delete States
+  const [editingImpulseId, setEditingImpulseId] = useState<string | null>(null);
+  const [editingImpulseText, setEditingImpulseText] = useState("");
+  const [deletingImpulseId, setDeletingImpulseId] = useState<string | null>(null);
+
+  const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
+  const [editingReplyText, setEditingReplyText] = useState("");
+  const [deletingReplyId, setDeletingReplyId] = useState<string | null>(null);
 
   // Boards States
   const [boards, setBoards] = useState<Board[]>(initialBoards);
@@ -408,6 +419,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
     const storedName = localStorage.getItem("travel_display_name");
     const storedCode = localStorage.getItem("travel_recovery_code");
     const storedAvatar = localStorage.getItem("travel_avatar_id");
+    const storedVisitorId = localStorage.getItem("travel_visitor_id");
 
     if (storedName) {
       setIsVerified(true);
@@ -415,6 +427,9 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
       setRecoveryCode(storedCode || "");
       if (storedAvatar) {
         setAvatarId(storedAvatar);
+      }
+      if (storedVisitorId) {
+        setVisitorId(storedVisitorId);
       }
     }
 
@@ -427,9 +442,13 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
           setDisplayName(data.nickname);
           setRecoveryCode(data.recoveryCode);
           setAvatarId(data.avatarId || "avatar_1");
+          setVisitorId(data.visitorId || "");
           localStorage.setItem("travel_display_name", data.nickname);
           localStorage.setItem("travel_recovery_code", data.recoveryCode);
           localStorage.setItem("travel_avatar_id", data.avatarId || "avatar_1");
+          if (data.visitorId) {
+            localStorage.setItem("travel_visitor_id", data.visitorId);
+          }
         }
       })
       .catch((err) => console.error("Error fetching visitor profile:", err));
@@ -686,6 +705,123 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
       }
     } catch (err) {
       console.error("Error updating avatar:", err);
+    }
+  };
+
+  const handleEditImpulse = async (impulseId: string) => {
+    const trimmed = editingImpulseText.trim();
+    if (trimmed.length < 3 || trimmed.length > 3000) {
+      alert("Impulse text must be between 3 and 3000 characters.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/community/impulses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ impulse_id: impulseId, content: trimmed }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setImpulses((prev) =>
+          prev.map((imp) =>
+            imp.impulse_id === impulseId
+              ? { ...imp, content: data.content, updated_at: data.updated_at }
+              : imp
+          )
+        );
+        setEditingImpulseId(null);
+        setEditingImpulseText("");
+      } else {
+        alert(data.message || "Failed to update impulse.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Connection error.");
+    }
+  };
+
+  const handleDeleteImpulse = async (impulseId: string) => {
+    try {
+      const res = await fetch(`/api/community/impulses?impulse_id=${impulseId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setImpulses((prev) => prev.filter((imp) => imp.impulse_id !== impulseId));
+        setDeletingImpulseId(null);
+      } else {
+        alert(data.message || "Failed to delete impulse.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Connection error.");
+    }
+  };
+
+  const handleEditReply = async (replyId: string, impulseId: string) => {
+    const trimmed = editingReplyText.trim();
+    if (trimmed.length < 1 || trimmed.length > 200) {
+      alert("Reply text must be between 1 and 200 characters.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/community/replies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reply_id: replyId, content: trimmed }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReplies((prev) => {
+          const list = prev[impulseId] || [];
+          return {
+            ...prev,
+            [impulseId]: list.map((rep) =>
+              rep.reply_id === replyId
+                ? { ...rep, content: data.content, updated_at: data.updated_at }
+                : rep
+            ),
+          };
+        });
+        setEditingReplyId(null);
+        setEditingReplyText("");
+      } else {
+        alert(data.message || "Failed to update comment.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Connection error.");
+    }
+  };
+
+  const handleDeleteReply = async (replyId: string, impulseId: string) => {
+    try {
+      const res = await fetch(`/api/community/replies?reply_id=${replyId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReplies((prev) => {
+          const list = prev[impulseId] || [];
+          return {
+            ...prev,
+            [impulseId]: list.filter((rep) => rep.reply_id !== replyId),
+          };
+        });
+        setImpulses((prev) =>
+          prev.map((imp) =>
+            imp.impulse_id === impulseId
+              ? { ...imp, reply_count: Math.max(0, imp.reply_count - 1) }
+              : imp
+          )
+        );
+        setDeletingReplyId(null);
+      } else {
+        alert(data.message || "Failed to delete comment.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Connection error.");
     }
   };
 
@@ -1068,8 +1204,49 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                         <span className="font-body text-sm font-bold text-ink block animate-fade-in">
                           {impulse.visitor.display_name}
                         </span>
-                        <span className="text-3xs text-dust/70 block">
+                        <span className="text-3xs text-dust/70 block flex items-center gap-1.5 mt-0.5 select-none">
                           {formatTimeAgo(impulse.created_at)}
+                          {impulse.updated_at && <span className="italic text-dust/40">(edited)</span>}
+                          {isVerified && impulse.visitor.visitor_id === visitorId && (
+                            <>
+                              <span className="text-dust/30 select-none">·</span>
+                              <button
+                                onClick={() => {
+                                  setEditingImpulseId(impulse.impulse_id);
+                                  setEditingImpulseText(impulse.content);
+                                }}
+                                className="text-dust hover:text-amber transition-colors cursor-pointer font-semibold text-[9px]"
+                              >
+                                Edit
+                              </button>
+                              <span className="text-dust/30 select-none">·</span>
+                              {deletingImpulseId === impulse.impulse_id ? (
+                                <span className="inline-flex items-center gap-1 text-[9px]">
+                                  <span className="text-red-500 font-semibold">Sure?</span>
+                                  <button
+                                    onClick={() => handleDeleteImpulse(impulse.impulse_id)}
+                                    className="text-red-600 hover:text-red-800 transition-colors font-bold px-0.5"
+                                  >
+                                    Yes
+                                  </button>
+                                  <span className="text-dust/40">/</span>
+                                  <button
+                                    onClick={() => setDeletingImpulseId(null)}
+                                    className="text-dust hover:text-ink transition-colors font-bold px-0.5"
+                                  >
+                                    No
+                                  </button>
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => setDeletingImpulseId(impulse.impulse_id)}
+                                  className="text-dust hover:text-red-500 transition-colors cursor-pointer font-semibold text-[9px]"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </>
+                          )}
                         </span>
                       </div>
                     </div>
@@ -1097,9 +1274,43 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                   </div>
 
                   {/* Content body */}
-                  <p className="text-sm text-ink leading-relaxed font-body mt-4 whitespace-pre-wrap">
-                    {impulse.content}
-                  </p>
+                  {editingImpulseId === impulse.impulse_id ? (
+                    <div className="mt-4 space-y-2">
+                      <textarea
+                         value={editingImpulseText}
+                         onChange={(e) => setEditingImpulseText(e.target.value.slice(0, 3000))}
+                         rows={4}
+                         className="w-full p-2 border border-ink/10 rounded-sm text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors resize-none bg-paper"
+                      />
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] text-dust/50 font-body">
+                          {editingImpulseText.length}/3000
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingImpulseId(null);
+                              setEditingImpulseText("");
+                            }}
+                            className="text-3xs uppercase font-bold tracking-wider text-dust hover:text-ink transition-colors font-body py-1 px-3"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleEditImpulse(impulse.impulse_id)}
+                            disabled={!editingImpulseText.trim()}
+                            className="py-1 px-4 bg-ink text-cream hover:bg-amber hover:text-white disabled:bg-dust/20 disabled:text-cream/50 font-body text-3xs font-bold uppercase tracking-wider transition-colors rounded-sm shadow-sm"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-ink leading-relaxed font-body mt-4 whitespace-pre-wrap">
+                      {impulse.content}
+                    </p>
+                  )}
 
                   {/* Actions & Reactions */}
                   <div className="mt-6 pt-4 border-t border-ink/5 flex flex-wrap gap-4 items-center justify-between">
@@ -1168,13 +1379,88 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                                     <span className="font-body text-2xs font-bold text-ink">
                                       {reply.visitor.display_name}
                                     </span>
-                                    <span className="text-[9px] text-dust/50">
+                                    <span className="text-[9px] text-dust/50 flex items-center gap-1.5 select-none">
                                       {formatTimeAgo(reply.created_at)}
+                                      {reply.updated_at && <span className="italic text-dust/40">(edited)</span>}
+                                      {isVerified && reply.visitor.visitor_id === visitorId && (
+                                        <>
+                                          <span className="text-dust/30 select-none">·</span>
+                                          <button
+                                            onClick={() => {
+                                              setEditingReplyId(reply.reply_id);
+                                              setEditingReplyText(reply.content);
+                                            }}
+                                            className="text-dust hover:text-amber transition-colors cursor-pointer text-[8px]"
+                                          >
+                                            Edit
+                                          </button>
+                                          <span className="text-dust/30 select-none">·</span>
+                                          {deletingReplyId === reply.reply_id ? (
+                                            <span className="inline-flex items-center gap-1 text-[8px]">
+                                              <span className="text-red-500">Sure?</span>
+                                              <button
+                                                onClick={() => handleDeleteReply(reply.reply_id, impulse.impulse_id)}
+                                                className="text-red-600 hover:text-red-800 transition-colors font-bold"
+                                              >
+                                                Yes
+                                              </button>
+                                              <span className="text-dust/40">/</span>
+                                              <button
+                                                onClick={() => setDeletingReplyId(null)}
+                                                className="text-dust hover:text-ink transition-colors font-bold"
+                                              >
+                                                No
+                                              </button>
+                                            </span>
+                                          ) : (
+                                            <button
+                                              onClick={() => setDeletingReplyId(reply.reply_id)}
+                                              className="text-dust hover:text-red-500 transition-colors cursor-pointer text-[8px]"
+                                            >
+                                              Delete
+                                            </button>
+                                          )}
+                                        </>
+                                      )}
                                     </span>
                                   </div>
-                                  <p className="text-xs text-ink leading-relaxed font-body whitespace-pre-wrap">
-                                    {reply.content}
-                                  </p>
+                                  {editingReplyId === reply.reply_id ? (
+                                    <div className="mt-1.5 space-y-2">
+                                      <input
+                                        type="text"
+                                        value={editingReplyText}
+                                        onChange={(e) => setEditingReplyText(e.target.value.slice(0, 200))}
+                                        className="w-full px-2 py-1 border border-ink/10 rounded-sm text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors bg-white"
+                                      />
+                                      <div className="flex justify-between items-center text-[10px]">
+                                        <span className="text-3xs text-dust/50 font-body">
+                                          {editingReplyText.length}/200
+                                        </span>
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => {
+                                              setEditingReplyId(null);
+                                              setEditingReplyText("");
+                                            }}
+                                            className="text-3xs uppercase font-bold tracking-wider text-dust hover:text-ink transition-colors font-body px-1 py-0.5"
+                                          >
+                                            Cancel
+                                          </button>
+                                          <button
+                                            onClick={() => handleEditReply(reply.reply_id, impulse.impulse_id)}
+                                            disabled={!editingReplyText.trim()}
+                                            className="bg-ink text-cream hover:bg-amber hover:text-white px-2 py-0.5 rounded-xs text-3xs font-bold uppercase transition-colors"
+                                          >
+                                            Save
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-ink leading-relaxed font-body whitespace-pre-wrap">
+                                      {reply.content}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             ))

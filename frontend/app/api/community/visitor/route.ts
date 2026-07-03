@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      visitorId: visitorId,
       nickname: visitor.display_name,
       recoveryCode: visitor.recovery_code,
       avatarId: visitor.avatar_id || "avatar_1"
