@@ -62,6 +62,7 @@ export interface Post {
   weather: string | null;
   mood: string | null;
   highlights: string[] | null;
+  is_enriched: boolean | null;
 }
 
 export type PostInsert = Omit<Post, "created_at" | "updated_at">;
@@ -98,6 +99,7 @@ export interface Media {
   provider: string | null;
   alt_text: string | null;
   caption: string | null;
+  tags: string[] | null;
   created_at: string;
 }
 
