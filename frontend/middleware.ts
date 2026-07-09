@@ -25,6 +25,22 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(gateUrl);
   }
 
+  // 4. Admin-Pfad-Schutz für /admin und /api/admin
+  if (path.startsWith("/admin") || path.startsWith("/api/admin")) {
+    const adminToken = request.cookies.get("admin_session")?.value;
+    const expectedAdminSecret = process.env.ADMIN_SESSION_SECRET || (expectedSecret + "_admin_secret");
+    if (!adminToken || adminToken !== expectedAdminSecret) {
+      if (path.startsWith("/api/")) {
+        return new NextResponse(
+          JSON.stringify({ success: false, error: "Unauthorized admin access." }),
+          { status: 403, headers: { "content-type": "application/json" } }
+        );
+      }
+      const gateUrl = new URL("/gate", request.url);
+      return NextResponse.redirect(gateUrl);
+    }
+  }
+
   return NextResponse.next();
 }
 

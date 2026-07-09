@@ -65,14 +65,64 @@ export async function POST(request: NextRequest) {
         queryCode = `${cleanCode.slice(0, 3)}-${cleanCode.slice(3)}`;
       }
 
-      // Suche nach dem Besucher
-      const { data: visitor, error: visitorErr } = await adminClient
-        .from("community_visitors")
-        .select("*")
-        .eq("recovery_code", queryCode)
-        .single();
+      // Check if it's an admin key
+      const adminKeysStr = process.env.ADMIN_KEYS || "";
+      const adminKeys = adminKeysStr.split(",").map(k => k.trim()).filter(Boolean);
+      const cleanCodeLower = cleanCode.toLowerCase();
+      const isAdminCode = adminKeys.some(k => k.replace(/[^0-9a-zA-Z]/g, "").toLowerCase() === cleanCodeLower);
 
-      if (visitorErr || !visitor) {
+      let visitor = null;
+
+      if (isAdminCode) {
+        // First try to find existing visitor
+        const { data: existingVisitor } = await adminClient
+          .from("community_visitors")
+          .select("*")
+          .eq("recovery_code", queryCode)
+          .single();
+
+        if (existingVisitor) {
+          visitor = existingVisitor;
+        } else {
+          // Create the admin visitor profile
+          const { data: newVisitor, error: insertErr } = await adminClient
+            .from("community_visitors")
+            .insert({
+              display_name: "Simon (Admin)",
+              recovery_code: queryCode,
+              visit_count: 1,
+              avatar_id: "avatar_1"
+            })
+            .select()
+            .single();
+
+          if (insertErr) {
+            console.error("Failed to insert admin visitor:", insertErr);
+            visitor = {
+              visitor_id: "00000000-0000-0000-0000-000000000000",
+              display_name: "Simon (Admin)",
+              recovery_code: queryCode,
+              avatar_id: "avatar_1",
+              visit_count: 1,
+              is_banned: false
+            };
+          } else {
+            visitor = newVisitor;
+          }
+        }
+      } else {
+        const { data: existingVisitor, error: visitorErr } = await adminClient
+          .from("community_visitors")
+          .select("*")
+          .eq("recovery_code", queryCode)
+          .single();
+
+        if (!visitorErr && existingVisitor) {
+          visitor = existingVisitor;
+        }
+      }
+
+      if (!visitor) {
         return NextResponse.json(
           { success: false, message: "Oh, cant't remember you. Try again or just sign up again." },
           { status: 404 }
@@ -86,14 +136,16 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Aktualisiere Aktivität
-      await adminClient
-        .from("community_visitors")
-        .update({
-          visit_count: (visitor.visit_count || 1) + 1,
-          last_active_at: new Date().toISOString()
-        })
-        .eq("visitor_id", visitor.visitor_id);
+      // Aktualisiere Aktivität (only if it's a real visitor record in DB)
+      if (visitor.visitor_id !== "00000000-0000-0000-0000-000000000000") {
+        await adminClient
+          .from("community_visitors")
+          .update({
+            visit_count: (visitor.visit_count || 1) + 1,
+            last_active_at: new Date().toISOString()
+          })
+          .eq("visitor_id", visitor.visitor_id);
+      }
 
       visitorId = visitor.visitor_id;
       displayName = visitor.display_name;
@@ -219,12 +271,14 @@ export async function POST(request: NextRequest) {
       visitorId: visitorId
     });
 
+    const isSecure = process.env.NODE_ENV === "production";
+
     // travel_session Cookie (für Middleware)
     response.cookies.set("travel_session", sessionSecret, {
       path: "/",
       maxAge: 60 * 60 * 24 * 365 * 10,
       httpOnly: true,
-      secure: true,
+      secure: isSecure,
       sameSite: "strict",
     });
 
@@ -233,9 +287,29 @@ export async function POST(request: NextRequest) {
       path: "/",
       maxAge: 60 * 60 * 24 * 365 * 10,
       httpOnly: true,
-      secure: true,
+      secure: isSecure,
       sameSite: "strict",
     });
+
+    // admin_session Cookie falls Admin
+    const adminKeysStr = process.env.ADMIN_KEYS || "";
+    const adminKeys = adminKeysStr.split(",").map(k => k.trim()).filter(Boolean);
+    const cleanRecoveryCodeLower = recoveryCode.replace(/[^0-9a-zA-Z]/g, "").toLowerCase();
+    const isAdmin = adminKeys.some(k => k.replace(/[^0-9a-zA-Z]/g, "").toLowerCase() === cleanRecoveryCodeLower);
+
+    if (isAdmin) {
+      const expectedAdminSecret = process.env.ADMIN_SESSION_SECRET || (sessionSecret + "_admin_secret");
+      response.cookies.set("admin_session", expectedAdminSecret, {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365 * 10,
+        httpOnly: true,
+        secure: isSecure,
+        sameSite: "strict",
+      });
+    } else {
+      // Clear admin session if a normal user logs in
+      response.cookies.delete("admin_session");
+    }
 
     return response;
   } catch (error) {

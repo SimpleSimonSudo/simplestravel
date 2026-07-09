@@ -14,24 +14,91 @@ interface MappedPost {
   city: string | null;
   country_name: string | null;
   country_code: string | null;
+  trip_id: number | null;
+  trip_name: string | null;
+  media: Array<{
+    storage_path: string | null;
+    original_url: string;
+    media_type: string;
+    width: number | null;
+    height: number | null;
+  }>;
 }
 
 interface MapClientProps {
   posts: MappedPost[];
   visitedCountries: any[];
+  trips: { trip_id: number; trip_name: string }[];
 }
 
-export default function MapClient({ posts, visitedCountries }: MapClientProps) {
+// Helper to interpolate points along a quadratic Bezier curve for curved map paths
+function getBezierPoints(
+  start: [number, number],
+  end: [number, number],
+  numPoints = 40
+): [number, number][] {
+  const points: [number, number][] = [];
+  const [lng1, lat1] = start;
+  const [lng2, lat2] = end;
+
+  const midLng = (lng1 + lng2) / 2;
+  const midLat = (lat1 + lat2) / 2;
+
+  const dLng = lng2 - lng1;
+  const dLat = lat2 - lat1;
+
+  // Curvature factor: determines height of curve
+  const curveFactor = 0.15;
+  const ctrlLng = midLng - dLat * curveFactor;
+  const ctrlLat = midLat + dLng * curveFactor;
+
+  for (let i = 0; i <= numPoints; i++) {
+    const t = i / numPoints;
+    const lng = (1 - t) * (1 - t) * lng1 + 2 * (1 - t) * t * ctrlLng + t * t * lng2;
+    const lat = (1 - t) * (1 - t) * lat1 + 2 * (1 - t) * t * ctrlLat + t * t * lat2;
+    points.push([lng, lat]);
+  }
+  return points;
+}
+
+// Helper to choose a random image from the post, preferring landscape orientation
+function getPopupImage(post: MappedPost): string | null {
+  if (!post.media || post.media.length === 0) return null;
+
+  const images = post.media.filter(
+    (m) => m.media_type === "image" && (m.storage_path || m.original_url)
+  );
+  if (images.length === 0) return null;
+
+  const landscapeImages = images.filter(
+    (m) => m.width && m.height && m.width > m.height
+  );
+
+  const selectedList = landscapeImages.length > 0 ? landscapeImages : images;
+  const randomIndex = Math.floor(Math.random() * selectedList.length);
+  const selectedMedia = selectedList[randomIndex];
+
+  return selectedMedia.storage_path || selectedMedia.original_url;
+}
+
+export default function MapClient({ posts, visitedCountries, trips }: MapClientProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [layerMode, setLayerMode] = useState<"cream" | "satellite">("cream");
+  const [layerMode, setLayerMode] = useState<"cream" | "satellite">("satellite");
   const [hoveredCountry, setHoveredCountry] = useState<any>(null);
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
   const [showInfoBox, setShowInfoBox] = useState(true);
-  const [showHighlights, setShowHighlights] = useState(true);
+  const [showHighlights, setShowHighlights] = useState(false);
   const [showHoverCard, setShowHoverCard] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  
+  // Trip and Line state
+  const [selectedTripId, setSelectedTripId] = useState<string>("all");
+  const [showLines, setShowLines] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   const mapInstanceRef = useRef<any>(null);
+  const maplibreglRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
   const router = useRouter();
   const colorOffsetRef = useRef(Math.floor(Math.random() * 360));
 
@@ -80,6 +147,8 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
     const initMap = async () => {
       if (!mapRef.current) return;
       const maplibregl = (await import("maplibre-gl")).default;
+      maplibreglRef.current = maplibregl;
+      setMapLoaded(false);
 
       // Clean visited codes list to match with GeoJSON's iso_a2 properties
       const visitedCodes = visitedCountries
@@ -120,7 +189,8 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
               id: "background",
               type: "background",
               paint: {
-                "background-color": "#f4ede0",
+                "background-color": "rgba(0, 0, 0, 0)",
+                "background-opacity": 0,
               },
             },
           ],
@@ -221,70 +291,33 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
         // 7. Standard Navigation control
         map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "bottom-right");
 
-        // 8. Dynamic Pins (Markers) for posts
-        const bounds: [number, number][] = [];
-
-        posts.forEach((post) => {
-          const date = new Date(post.actual_date || post.post_date);
-          const formattedDate = date.toLocaleDateString("en-US", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          });
-
-          // Custom Marker Wrapper
-          const el = document.createElement("div");
-          el.className = "custom-marker-container cursor-pointer";
-          el.innerHTML = `
-            <div class="relative flex items-center justify-center w-5 h-5 group">
-              <div class="absolute w-5 h-5 bg-amber/30 rounded-full animate-ping"></div>
-              <div class="relative w-3.5 h-3.5 bg-amber rounded-full border-2 border-white shadow-md flex items-center justify-center">
-                <div class="w-1 h-1 bg-white rounded-full"></div>
-              </div>
-            </div>
-          `;
-
-          // Post Popup Content
-          const popupContent = `
-            <div class="p-3 font-body text-xs min-w-[200px] text-ink">
-              <div class="flex items-center gap-1.5 mb-1 text-[10px] text-dust font-medium uppercase tracking-wider">
-                <span>${formattedDate}</span>
-                ${post.country_code ? `<span>·</span> <span>${countryCodeToFlag(post.country_code)} ${post.country_name}</span>` : ""}
-              </div>
-              <h4 class="font-display font-bold text-sm text-ink mb-1">
-                <a href="/post/${post.post_id}" target="_blank" class="hover:text-amber transition-colors">
-                  ${post.title || "Diary Entry"}
-                </a>
-              </h4>
-              ${post.city ? `<p class="text-dust text-[10px] mb-2">Location: ${post.city}</p>` : ""}
-              ${post.summary ? `<p class="text-dust line-clamp-2 leading-relaxed text-[11px] font-light bg-cream/10 p-2 border-l border-amber/30">${post.summary}</p>` : ""}
-              <div class="mt-3 text-right">
-                <a href="/post/${post.post_id}" class="text-[10px] uppercase font-semibold text-amber hover:underline">
-                  Read Post &rarr;
-                </a>
-              </div>
-            </div>
-          `;
-
-          const popup = new maplibregl.Popup({
-            closeButton: false,
-            className: "custom-maplibre-popup",
-            maxWidth: "280px",
-            offset: 12,
-          }).setHTML(popupContent);
-
-          new maplibregl.Marker({ element: el })
-            .setLngLat([post.longitude, post.latitude])
-            .setPopup(popup)
-            .addTo(map);
-
-          bounds.push([post.longitude, post.latitude]);
+        // 8. Add Travel Lines source and layer (rebuilt reactively)
+        map.addSource("travel-lines", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
         });
 
-        // Fit map bounds to encompass all posts
-        if (bounds.length > 0) {
-          const lngs = bounds.map((b) => b[0]);
-          const lats = bounds.map((b) => b[1]);
+        map.addLayer({
+          id: "travel-lines-layer",
+          type: "line",
+          source: "travel-lines",
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+            visibility: showLines ? "visible" : "none",
+          },
+          paint: {
+            "line-color": "#f59e0b", // Amber
+            "line-width": 3,
+            "line-opacity": 0.85,
+          },
+        });
+
+        // Fit initial map bounds to encompass all posts
+        const initialBounds = posts.map((p) => [p.longitude, p.latitude]);
+        if (initialBounds.length > 0) {
+          const lngs = initialBounds.map((b) => b[0]);
+          const lats = initialBounds.map((b) => b[1]);
           const minLng = Math.min(...lngs);
           const maxLng = Math.max(...lngs);
           const minLat = Math.min(...lats);
@@ -292,7 +325,7 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
           map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 80, maxZoom: 8 });
         }
 
-        // 9. Attach Country Interaction Events
+        // 10. Attach Country Interaction Events
         map.on("mousemove", "countries-fill", (e: any) => {
           if (!showHoverCardRef.current) return;
           if (e.features && e.features.length > 0) {
@@ -336,6 +369,30 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
             }
           }
         });
+
+        // Set initial background parallax variables
+        const initialCenter = map.getCenter();
+        const initialBearing = map.getBearing();
+        const parent = mapRef.current?.parentElement;
+        if (parent) {
+          parent.style.setProperty("--bg-x", `${initialCenter.lng.toFixed(4)}`);
+          parent.style.setProperty("--bg-y", `${initialCenter.lat.toFixed(4)}`);
+          parent.style.setProperty("--bg-bearing", `${initialBearing.toFixed(2)}deg`);
+        }
+
+        // Update background variables on map move/rotate for parallax
+        map.on("move", () => {
+          const center = map.getCenter();
+          const bearing = map.getBearing();
+          const p = mapRef.current?.parentElement;
+          if (p) {
+            p.style.setProperty("--bg-x", `${center.lng.toFixed(4)}`);
+            p.style.setProperty("--bg-y", `${center.lat.toFixed(4)}`);
+            p.style.setProperty("--bg-bearing", `${bearing.toFixed(2)}deg`);
+          }
+        });
+
+        setMapLoaded(true);
       });
     };
 
@@ -349,6 +406,148 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
     };
   }, [posts, visitedCountries, router]);
 
+  // Reactive updates for pins & curved travel lines
+  const filteredPosts = posts.filter(
+    (post) => selectedTripId === "all" || String(post.trip_id) === selectedTripId
+  );
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const maplibregl = maplibreglRef.current;
+    if (!map || !mapLoaded || !maplibregl) return;
+
+    // 1. Rebuild HTML Markers
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = [];
+
+    const bounds: [number, number][] = [];
+
+    filteredPosts.forEach((post) => {
+      const date = new Date(post.actual_date || post.post_date);
+      const formattedDate = date.toLocaleDateString("en-US", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+
+      const el = document.createElement("div");
+      el.className = "custom-marker-container cursor-pointer";
+      const randomDelay = (Math.random() * 6).toFixed(2);
+      el.innerHTML = `
+        <div class="relative flex items-center justify-center w-5 h-5 group">
+          <div class="absolute w-5 h-5 bg-amber/35 rounded-full custom-ping-animation" style="animation-delay: ${randomDelay}s;"></div>
+          <div class="relative w-3.5 h-3.5 bg-amber rounded-full border-2 border-white shadow-md flex items-center justify-center">
+            <div class="w-1 h-1 bg-white rounded-full"></div>
+          </div>
+        </div>
+      `;
+
+      const imageUrl = getPopupImage(post);
+      const popupContent = `
+        <div class="font-body text-xs min-w-[220px] max-w-[280px] text-ink overflow-hidden rounded-xs">
+          ${imageUrl ? `
+            <div class="relative w-full h-32 overflow-hidden bg-cream/20">
+              <img 
+                src="${imageUrl}" 
+                alt="${post.title || 'Diary image'}" 
+                class="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                loading="lazy"
+              />
+            </div>
+          ` : ""}
+          <div class="p-3">
+            <div class="flex items-center gap-1.5 mb-1.5 text-[10px] text-dust font-medium uppercase tracking-wider">
+              <span>${formattedDate}</span>
+              ${post.country_code ? `<span>·</span> <span>${countryCodeToFlag(post.country_code)} ${post.country_name}</span>` : ""}
+            </div>
+            <h4 class="font-display font-bold text-sm text-ink mb-1.5 leading-snug">
+              <a href="/post/${post.post_id}" target="_blank" class="hover:text-amber transition-colors">
+                ${post.title || "Diary Entry"}
+              </a>
+            </h4>
+            ${post.city ? `<p class="text-dust text-[10px] mb-2.5">Location: ${post.city}</p>` : ""}
+            ${post.summary ? `<p class="text-dust line-clamp-2 leading-relaxed text-[11px] font-light bg-cream/10 p-2 border-l border-amber/30">${post.summary}</p>` : ""}
+            <div class="mt-3.5 text-right">
+              <a href="/post/${post.post_id}" target="_blank" class="text-[10px] uppercase font-bold text-amber hover:underline tracking-wide">
+                Read Post &rarr;
+              </a>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const popup = new maplibregl.Popup({
+        closeButton: false,
+        className: "custom-maplibre-popup",
+        maxWidth: "280px",
+        offset: 12,
+      }).setHTML(popupContent);
+
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([post.longitude, post.latitude])
+        .setPopup(popup)
+        .addTo(map);
+
+      markersRef.current.push(marker);
+      bounds.push([post.longitude, post.latitude]);
+    });
+
+    // Zoom and frame filtered posts when selecting a specific trip
+    if (selectedTripId !== "all" && bounds.length > 0) {
+      const lngs = bounds.map((b) => b[0]);
+      const lats = bounds.map((b) => b[1]);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 80, maxZoom: 8 });
+    }
+
+    // 2. Rebuild Curved Travel Lines GeoJSON
+    // Sort chronological: oldest to newest
+    const chronologicalPosts = [...filteredPosts].sort(
+      (a, b) => new Date(a.post_date).getTime() - new Date(b.post_date).getTime()
+    );
+
+    const lineFeatures: any[] = [];
+
+    if (showLines && chronologicalPosts.length >= 2) {
+      for (let i = 0; i < chronologicalPosts.length - 1; i++) {
+        const p1 = chronologicalPosts[i];
+        const p2 = chronologicalPosts[i + 1];
+        const startCoord: [number, number] = [p1.longitude, p1.latitude];
+        const endCoord: [number, number] = [p2.longitude, p2.latitude];
+
+        const curveCoords = getBezierPoints(startCoord, endCoord);
+        lineFeatures.push({
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: curveCoords,
+          },
+        });
+      }
+    }
+
+    const geojsonData = {
+      type: "FeatureCollection",
+      features: lineFeatures,
+    };
+
+    const source = map.getSource("travel-lines");
+    if (source) {
+      source.setData(geojsonData);
+    }
+
+    // Synchronize visibility setting
+    if (map.getLayer("travel-lines-layer")) {
+      map.setLayoutProperty("travel-lines-layer", "visibility", showLines ? "visible" : "none");
+    }
+  }, [mapLoaded, filteredPosts, showLines, selectedTripId]);
+
+
+
   // Synchronize Layer Mode transitions
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -360,7 +559,7 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
     if (map.getLayer("satellite-tiles-layer")) {
       map.setLayoutProperty("satellite-tiles-layer", "visibility", layerMode === "satellite" ? "visible" : "none");
     }
-  }, [layerMode]);
+  }, [layerMode, mapLoaded]);
 
   // Synchronize Country Highlights paint properties
   useEffect(() => {
@@ -403,7 +602,7 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
         map.setPaintProperty("countries-outline", "line-color", "rgba(0, 0, 0, 0.0)");
       }
     }
-  }, [showHighlights, visitedCountries]);
+  }, [showHighlights, visitedCountries, mapLoaded]);
 
   // Dynamic positioning logic for the hover info card to prevent off-screen overflow
   const getCardStyle = (): React.CSSProperties => {
@@ -440,7 +639,7 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
   return (
     <>
       {/* Map Container */}
-      <div ref={mapRef} className="w-full h-full z-0 bg-cream" />
+      <div ref={mapRef} className="relative w-full h-full z-10 bg-transparent" />
 
       {/* Map Settings Collapsible Control */}
       <div className="absolute top-20 right-6 z-10 font-body text-xs flex flex-col items-end">
@@ -470,7 +669,7 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
 
         {/* Expandable Menu */}
         {isMenuOpen && (
-          <div className="mt-2 w-[220px] p-4 bg-white/98 backdrop-blur-md border border-ink/5 rounded-xs shadow-lg flex flex-col gap-4 animate-fade-in z-20">
+          <div className="mt-2 w-[220px] p-4 bg-white border border-ink/5 rounded-xs shadow-lg flex flex-col gap-4 animate-fade-in z-20">
             {/* Base Layer Switcher */}
             <div>
               <span className="block text-[10px] uppercase font-bold tracking-wider text-dust mb-2">Map Style</span>
@@ -492,6 +691,23 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
                   Satellite
                 </button>
               </div>
+            </div>
+
+            {/* Trip Filter */}
+            <div className="border-t border-ink/5 pt-3">
+              <span className="block text-[10px] uppercase font-bold tracking-wider text-dust mb-2">Filter by Trip</span>
+              <select
+                value={selectedTripId}
+                onChange={(e) => setSelectedTripId(e.target.value)}
+                className="w-full bg-cream/30 border border-ink/5 rounded-xs px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-amber cursor-pointer"
+              >
+                <option value="all">All Trips</option>
+                {trips.map((t) => (
+                  <option key={t.trip_id} value={String(t.trip_id)}>
+                    {t.trip_name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Feature Toggles */}
@@ -519,6 +735,17 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
                   className="w-3.5 h-3.5 accent-amber rounded-xs cursor-pointer border border-ink/10"
                 />
               </label>
+
+              {/* Travel Lines Toggle */}
+              <label className="flex items-center justify-between cursor-pointer select-none text-[11px]">
+                <span className="text-ink font-medium">Show Travel Lines</span>
+                <input
+                  type="checkbox"
+                  checked={showLines}
+                  onChange={(e) => setShowLines(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-amber rounded-xs cursor-pointer border border-ink/10"
+                />
+              </label>
             </div>
           </div>
         )}
@@ -527,7 +754,6 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
       {/* Floating Info Box */}
       {showInfoBox && (
         <div className="absolute top-20 left-6 z-10 max-w-sm p-6 bg-white/95 backdrop-blur-md border border-ink/5 rounded-sm shadow-lg font-body animate-fade-up">
-          {/* Close button */}
           <button
             onClick={() => setShowInfoBox(false)}
             className="absolute top-4 right-4 text-dust hover:text-ink transition-colors cursor-pointer"
@@ -656,6 +882,38 @@ export default function MapClient({ posts, visitedCountries }: MapClientProps) {
         }
         .maplibregl-canvas-container.maplibregl-interactive {
           cursor: default;
+        }
+        .maplibregl-canvas {
+          background-color: transparent !important;
+        }
+        .maplibregl-canvas-container {
+          background-color: transparent !important;
+        }
+        
+        /* Forces markers to occlude when rotated behind the 3D globe */
+        .maplibregl-marker-covered {
+          display: none !important;
+          pointer-events: none !important;
+        }
+        
+        /* Calm, staggered pulse animation for pins */
+        .custom-ping-animation {
+          animation: custom-ping 6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+        }
+
+        @keyframes custom-ping {
+          0% {
+            transform: scale(1);
+            opacity: 0.75;
+          }
+          15% {
+            transform: scale(2.4);
+            opacity: 0;
+          }
+          100% {
+            transform: scale(2.4);
+            opacity: 0;
+          }
         }
       `}</style>
     </>

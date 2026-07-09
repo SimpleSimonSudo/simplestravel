@@ -82,6 +82,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
   // UI state
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "missing_coords" | "missing_country" | "missing_trip" | "enriched">("all");
+  const [selectedYear, setSelectedYear] = useState<string>("all");
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoringMedia, setIsRestoringMedia] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -131,16 +132,72 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
     return { lat: null, lng: null };
   }, [posts, selectedPostIndex]);
 
-  // Find previous post in chronological list that HAS companions
+  // Find previous post in chronological list that is enriched (to default companions from)
   const prevCompanions = useMemo(() => {
     if (selectedPostIndex <= 0) return null;
     for (let i = selectedPostIndex - 1; i >= 0; i--) {
-      if (posts[i].companions && posts[i].companions!.length > 0) {
-        return posts[i].companions;
+      const isEnriched = posts[i].is_enriched || (posts[i].latitude !== null && posts[i].longitude !== null && posts[i].country_id !== null);
+      if (isEnriched) {
+        return posts[i].companions || [];
       }
     }
     return null;
   }, [posts, selectedPostIndex]);
+
+  // Find previous post in chronological list that has a trip_id (to default trip from)
+  const prevTripId = useMemo(() => {
+    if (selectedPostIndex <= 0) return null;
+    for (let i = selectedPostIndex - 1; i >= 0; i--) {
+      if (posts[i].trip_id !== null && posts[i].trip_id !== undefined) {
+        return posts[i].trip_id;
+      }
+    }
+    return null;
+  }, [posts, selectedPostIndex]);
+
+  // Dynamically extract all unique years from posts
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    posts.forEach((post) => {
+      const dateStr = post.actual_date || post.post_date;
+      if (dateStr) {
+        const year = new Date(dateStr).getFullYear().toString();
+        if (!isNaN(Number(year))) {
+          years.add(year);
+        }
+      }
+    });
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [posts]);
+
+  const expectedMediaCount = selectedPost?.media_count ?? 0;
+
+  // Find which media blocks are missing from the media table
+  const missingBlocks = useMemo(() => {
+    if (!postDetails || !postDetails.content_blocks) return [];
+    const blocks = postDetails.content_blocks || [];
+    const existingIndices = new Set(mediaList.map((m) => m.block_index));
+
+    const missing: Array<{ index: number; type: string; url?: string; provider?: string }> = [];
+    blocks.forEach((block: any, idx: number) => {
+      const type = block.type;
+      if (type === "image" || type === "video" || type === "audio") {
+        if (!existingIndices.has(idx)) {
+          let url = block.url || block.media?.url || "";
+          if (!url && block.attribution?.url) {
+            url = block.attribution.url;
+          }
+          missing.push({
+            index: idx,
+            type,
+            url,
+            provider: block.provider,
+          });
+        }
+      }
+    });
+    return missing;
+  }, [postDetails, mediaList]);
 
   // Fetch full post details (content blocks & media) from Supabase client when selected post changes
   useEffect(() => {
@@ -180,7 +237,13 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
         setIsEnriched(post.is_enriched || false);
         setActualDate(post.actual_date ? post.actual_date.substring(0, 10) : post.post_date.substring(0, 10));
         setCountryId(post.country_id ? String(post.country_id) : "");
-        setTripId(post.trip_id ? String(post.trip_id) : "");
+        if (post.trip_id) {
+          setTripId(String(post.trip_id));
+        } else if (prevTripId) {
+          setTripId(String(prevTripId));
+        } else {
+          setTripId("");
+        }
         setLatitude(post.latitude);
         setLongitude(post.longitude);
         setCity(post.city || "");
@@ -214,7 +277,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
     }
 
     loadPostDetails();
-  }, [selectedPostId, posts, selectedPostIndex, prevCompanions]);
+  }, [selectedPostId, posts, selectedPostIndex, prevCompanions, prevTripId]);
 
   // Handle location reverse geocoded by map
   const handleLocationFound = (
@@ -236,7 +299,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
     if (!geoSuggestion) return;
     if (geoSuggestion.city) setCity(geoSuggestion.city);
     if (geoSuggestion.region) setRegion(geoSuggestion.region);
-    
+
     // Auto-select country dropdown based on geocoded country details
     if (geoSuggestion.country || geoSuggestion.countryCode) {
       const match = options.countries.find(
@@ -397,7 +460,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
     }
   };
 
-  // Helper to filter posts based on query and tabs
+  // Helper to filter posts based on query, tabs and year
   const getFilteredPosts = (postList: PostItem[]) => {
     return postList.filter((post) => {
       // 1. Search Query Filter
@@ -415,18 +478,34 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
       const hasCountry = post.country_id !== null;
       const hasTrip = post.trip_id !== null;
 
-      if (filterMode === "missing_coords") return !isPostEnriched && !hasCoords;
-      if (filterMode === "missing_country") return !isPostEnriched && !hasCountry;
-      if (filterMode === "missing_trip") return !isPostEnriched && !hasTrip;
-      if (filterMode === "enriched") return isPostEnriched;
-      
+      if (filterMode === "missing_coords") {
+        if (isPostEnriched || hasCoords) return false;
+      } else if (filterMode === "missing_country") {
+        if (isPostEnriched || hasCountry) return false;
+      } else if (filterMode === "missing_trip") {
+        if (isPostEnriched || hasTrip) return false;
+      } else if (filterMode === "enriched") {
+        if (!isPostEnriched) return false;
+      }
+
+      // 3. Year Filter
+      if (selectedYear !== "all") {
+        const dateStr = post.actual_date || post.post_date;
+        if (dateStr) {
+          const postYear = new Date(dateStr).getFullYear().toString();
+          if (postYear !== selectedYear) return false;
+        } else {
+          return false;
+        }
+      }
+
       return true;
     });
   };
 
   const filteredPosts = useMemo(() => {
     return getFilteredPosts(posts);
-  }, [posts, searchQuery, filterMode]);
+  }, [posts, searchQuery, filterMode, selectedYear]);
 
   // Compute overall completion stats
   const stats = useMemo(() => {
@@ -434,7 +513,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
     const hasCoords = posts.filter(p => p.latitude !== null && p.longitude !== null).length;
     const hasCountry = posts.filter(p => p.country_id !== null).length;
     const enriched = posts.filter(p => p.is_enriched || (p.latitude !== null && p.longitude !== null && p.country_id !== null)).length;
-    
+
     return { total, hasCoords, hasCountry, enriched };
   }, [posts]);
 
@@ -547,7 +626,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
       s.toLowerCase().includes(inputValue.toLowerCase()) && !selectedItems.includes(s)
     );
 
-    const showCreateOption = inputValue.trim() !== "" && 
+    const showCreateOption = inputValue.trim() !== "" &&
       !baseSuggestions.some(s => s.toLowerCase() === inputValue.toLowerCase().trim()) &&
       !selectedItems.some(s => s.toLowerCase() === inputValue.toLowerCase().trim());
 
@@ -581,7 +660,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
     return (
       <div className="relative font-body text-xs flex flex-col gap-1 w-full">
         <span className="overline text-[10px] text-dust font-medium">{label}</span>
-        
+
         {/* Selected Items Tags */}
         {selectedItems.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
@@ -657,7 +736,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
           <span className="overline tracking-widest text-[9px] bg-amber/10 px-2 py-0.5 text-amber rounded-sm font-semibold">Admin Panel</span>
           <h1 className="font-display font-black text-xl text-ink leading-none">Travel Diary Annotation Dashboard</h1>
         </div>
-        
+
         {/* Progress Tracker */}
         <div className="flex items-center gap-4 text-xs font-body">
           <div className="flex flex-col items-end gap-0.5">
@@ -670,8 +749,8 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
             </div>
           </div>
           <div className="w-32 bg-cream h-2.5 rounded-full overflow-hidden border border-ink/5 shadow-inner">
-            <div 
-              className="bg-amber h-full transition-all duration-500 ease-out" 
+            <div
+              className="bg-amber h-full transition-all duration-500 ease-out"
               style={{ width: `${(stats.enriched / stats.total) * 100}%` }}
             />
           </div>
@@ -697,37 +776,51 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-3 py-1.5 border border-cream rounded-xs text-xs font-body text-ink focus:outline-none focus:border-amber bg-paper/30 font-light"
             />
+
+            {/* Year Filter */}
+            <div className="flex items-center justify-between gap-2 text-2xs font-body border-t border-cream/30 pt-1.5">
+              <span className="text-dust font-medium uppercase tracking-wider text-[9px]">Filter by Year</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="px-2 py-1 border border-cream rounded-xs text-ink focus:outline-none focus:border-amber bg-white font-light text-[11px] min-w-[100px]"
+              >
+                <option value="all">All Years</option>
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Filter Tabs */}
             <div className="grid grid-cols-2 gap-1.5 bg-paper/50 p-1 rounded-sm border border-ink/5">
               <button
                 onClick={() => setFilterMode("all")}
-                className={`py-1 rounded-xs text-[10px] font-bold uppercase transition-all ${
-                  filterMode === "all" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
-                }`}
+                className={`py-1 rounded-xs text-[10px] font-bold uppercase transition-all ${filterMode === "all" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
+                  }`}
               >
                 All ({posts.length})
               </button>
               <button
                 onClick={() => setFilterMode("missing_coords")}
-                className={`py-1 rounded-xs text-[10px] font-bold uppercase transition-all ${
-                  filterMode === "missing_coords" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
-                }`}
+                className={`py-1 rounded-xs text-[10px] font-bold uppercase transition-all ${filterMode === "missing_coords" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
+                  }`}
               >
                 Missing Pin
               </button>
               <button
                 onClick={() => setFilterMode("missing_country")}
-                className={`py-1 rounded-xs text-[10px] font-bold uppercase transition-all ${
-                  filterMode === "missing_country" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
-                }`}
+                className={`py-1 rounded-xs text-[10px] font-bold uppercase transition-all ${filterMode === "missing_country" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
+                  }`}
               >
                 No Country
               </button>
               <button
                 onClick={() => setFilterMode("enriched")}
-                className={`py-1 rounded-xs text-[10px] font-bold uppercase transition-all ${
-                  filterMode === "enriched" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
-                }`}
+                className={`py-1 rounded-xs text-[10px] font-bold uppercase transition-all ${filterMode === "enriched" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
+                  }`}
               >
                 Enriched
               </button>
@@ -755,21 +848,19 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
                   <button
                     key={post.post_id}
                     onClick={() => setSelectedPostId(post.post_id)}
-                    className={`w-full text-left p-3.5 flex flex-col gap-1 transition-all ${
-                      isSelected 
-                        ? "bg-amber/5 border-l-4 border-amber pl-2.5" 
-                        : "hover:bg-cream/15"
-                    }`}
+                    className={`w-full text-left p-3.5 flex flex-col gap-1 transition-all ${isSelected
+                      ? "bg-amber/5 border-l-4 border-amber pl-2.5"
+                      : "hover:bg-cream/15"
+                      }`}
                   >
                     <div className="flex justify-between items-center gap-2">
                       <span className="text-[10px] font-mono text-dust tracking-wider uppercase font-semibold">
                         {formattedDate}
                       </span>
-                      <span className={`text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-sm ${
-                        isPostEnriched 
-                          ? "bg-green-100 text-green-800" 
-                          : "bg-amber/10 text-amber"
-                      }`}>
+                      <span className={`text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-sm ${isPostEnriched
+                        ? "bg-green-100 text-green-800"
+                        : "bg-amber/10 text-amber"
+                        }`}>
                         {isPostEnriched ? "Enriched" : "Draft"}
                       </span>
                     </div>
@@ -809,28 +900,61 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
                 </h2>
                 <p className="text-dust text-xs font-body font-light flex items-center justify-between mt-1">
                   <span>Original Date: {new Date(selectedPost.post_date).toLocaleString("en-GB")}</span>
-                  {selectedPost.media_count !== null && selectedPost.media_count !== undefined && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-xs font-semibold ${
-                      selectedPost.media_count > mediaList.length
-                        ? "bg-red-50 text-red-600 border border-red-100"
-                        : "bg-green-50 text-green-700 border border-green-100"
-                    }`}>
-                      Media: {mediaList.length} / {selectedPost.media_count} {selectedPost.media_count > mediaList.length ? "⚠️ Missing" : "✅"}
+                  {expectedMediaCount !== null && expectedMediaCount !== undefined && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-xs font-semibold ${expectedMediaCount > mediaList.length
+                      ? "bg-red-50 text-red-600 border border-red-100"
+                      : "bg-green-50 text-green-700 border border-green-100"
+                      }`}>
+                      Media: {mediaList.length} / {expectedMediaCount} {expectedMediaCount > mediaList.length ? "⚠️ Missing" : "✅"}
                     </span>
                   )}
                 </p>
               </div>
 
               {/* Missing Media Alert */}
-              {selectedPost.media_count !== null && selectedPost.media_count !== undefined && selectedPost.media_count > mediaList.length && (
+              {expectedMediaCount > mediaList.length && (
                 <div className="p-3.5 bg-red-50/50 border border-red-200/50 rounded-sm text-xs text-red-700 flex flex-col gap-3 shadow-2xs">
                   <div className="flex items-start gap-2.5">
                     <span className="text-sm select-none">⚠️</span>
                     <div className="flex-1">
-                      <strong className="font-semibold">Missing Media Record Alert:</strong> This post has `media_count = {selectedPost.media_count}` in its metadata and defines image blocks, but only `{mediaList.length}` row{mediaList.length !== 1 ? "s exist" : " exists"} in the `media` table.
+                      <strong className="font-semibold">Missing Media Record Alert:</strong> This post has `media_count = {expectedMediaCount}` in its metadata, but only `{mediaList.length}` row{mediaList.length !== 1 ? "s exist" : " exists"} in the `media` table.
                       <p className="text-[10px] text-red-600/80 mt-1 font-light leading-normal">
-                        The image file is not in R2 or the database record is missing.
+                        The image/video file is not in R2 or the database record is missing.
                       </p>
+
+                      {/* Display missing blocks details */}
+                      {missingBlocks.length > 0 && (
+                        <div className="mt-3 space-y-1.5 border-t border-red-200/40 pt-2.5 text-[11px]">
+                          <span className="font-semibold text-red-800">Missing/External Media Details:</span>
+                          <ul className="list-disc pl-4 space-y-1 text-[10px] text-red-700/90 font-light">
+                            {missingBlocks.map((mb) => (
+                              <li key={mb.index}>
+                                {mb.type === "video" && mb.provider ? (
+                                  <span>
+                                    Block {mb.index}: External {mb.provider} Video —{" "}
+                                    {mb.url ? (
+                                      <a
+                                        href={mb.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-red-800 hover:text-red-900 underline font-semibold"
+                                      >
+                                        Open YouTube/Video Link
+                                      </a>
+                                    ) : (
+                                      "No URL found"
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span>
+                                    Block {mb.index}: {mb.type.charAt(0).toUpperCase() + mb.type.slice(1)} record is missing from the database.
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex justify-end border-t border-red-200/30 pt-2.5">
@@ -873,8 +997,8 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
                       .map((media, index) => {
                         const url = media.storage_path || media.original_url;
                         return (
-                          <div 
-                            key={media.media_id} 
+                          <div
+                            key={media.media_id}
                             className="flex gap-4 p-3 bg-white border border-ink/5 rounded-sm shadow-xs hover:border-amber/25 transition-colors"
                           >
                             <div className="relative w-16 h-16 bg-cream border border-ink/5 rounded-xs overflow-hidden flex-shrink-0">
@@ -951,7 +1075,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
                     </div>
                   ) : (
                     <div className="text-3xs text-dust italic leading-normal">
-                      Click anywhere on the map or search above to place coordinates and get automatic address suggestions.
+                      .
                     </div>
                   )}
                 </div>
@@ -1115,7 +1239,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
                     suggestions={options.companions}
                     placeholder="Search or type companion name..."
                   />
-                  {selectedPost.companions?.length === 0 && prevCompanions && companions === prevCompanions && (
+                  {selectedPost.companions?.length === 0 && prevCompanions && prevCompanions.length > 0 && companions === prevCompanions && (
                     <p className="text-[9px] text-amber italic mt-1 font-light">
                       Prefilled automatically from previous post
                     </p>
@@ -1130,7 +1254,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
                     onChange={setTravelMode}
                     suggestions={Array.from(new Set([
                       ...options.travelModes,
-                      "foot", "bike", "vespa/scooter", "car", "train", "bus", "ferry", "boat", "flight", "hitchhike", "tuk-tuk", "kayak", "cable car"
+                      "foot", "bike", "paraglide", "vespa/scooter", "car", "train", "bus", "ferry", "boat", "flight", "hitchhike", "tuk-tuk", "kayak", "cable car"
                     ])).sort()}
                     placeholder="e.g. bike"
                   />
@@ -1150,7 +1274,7 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
                     onChange={setMood}
                     suggestions={Array.from(new Set([
                       ...options.moods,
-                      "happy", "excited", "lost in awe", "adventurous", "curious", "peaceful", "relaxed", "thoughtful", "nostalgic", "tired", "exhausted but happy", "energetic", "melancholic"
+                      "happy", "excited", "scared", "in love", "joyful", "thankful", "lost in awe", "adventurous", "curious", "peaceful", "relaxed", "thoughtful", "nostalgic", "tired", "exhausted but happy", "energetic", "melancholic", "stressed", "sad", "lonely", "sick", "angry"
                     ])).sort()}
                     placeholder="e.g. happy"
                   />
@@ -1185,11 +1309,10 @@ export default function EnrichClient({ initialPosts }: EnrichClientProps) {
           {/* Footer Controls: Save actions */}
           <div className="p-4 border-t border-ink/5 flex-shrink-0 bg-white flex flex-col gap-2.5">
             {message && (
-              <div className={`p-2.5 text-xs rounded-xs font-body font-medium leading-snug border ${
-                message.type === "success" 
-                  ? "bg-green-50 border-green-200 text-green-800" 
-                  : "bg-red-50 border-red-200 text-red-800"
-              }`}>
+              <div className={`p-2.5 text-xs rounded-xs font-body font-medium leading-snug border ${message.type === "success"
+                ? "bg-green-50 border-green-200 text-green-800"
+                : "bg-red-50 border-red-200 text-red-800"
+                }`}>
                 {message.text}
               </div>
             )}
