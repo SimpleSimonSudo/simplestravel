@@ -88,7 +88,7 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
   const [showInfoBox, setShowInfoBox] = useState(true);
   const [showHighlights, setShowHighlights] = useState(false);
-  const [showHoverCard, setShowHoverCard] = useState(true);
+  const [showHoverCard, setShowHoverCard] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   // Trip and Line state
@@ -714,6 +714,17 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
             <div className="border-t border-ink/5 pt-3 flex flex-col gap-2.5">
               <span className="block text-[10px] uppercase font-bold tracking-wider text-dust mb-1">Overlay Features</span>
               
+              {/* Travel Lines Toggle */}
+              <label className="flex items-center justify-between cursor-pointer select-none text-[11px]">
+                <span className="text-ink font-medium">Show Travel Lines</span>
+                <input
+                  type="checkbox"
+                  checked={showLines}
+                  onChange={(e) => setShowLines(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-amber rounded-xs cursor-pointer border border-ink/10"
+                />
+              </label>
+
               {/* Highlight Visited */}
               <label className="flex items-center justify-between cursor-pointer select-none text-[11px]">
                 <span className="text-ink font-medium">Visited Highlights</span>
@@ -732,17 +743,6 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
                   type="checkbox"
                   checked={showHoverCard}
                   onChange={(e) => setShowHoverCard(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-amber rounded-xs cursor-pointer border border-ink/10"
-                />
-              </label>
-
-              {/* Travel Lines Toggle */}
-              <label className="flex items-center justify-between cursor-pointer select-none text-[11px]">
-                <span className="text-ink font-medium">Show Travel Lines</span>
-                <input
-                  type="checkbox"
-                  checked={showLines}
-                  onChange={(e) => setShowLines(e.target.checked)}
                   className="w-3.5 h-3.5 accent-amber rounded-xs cursor-pointer border border-ink/10"
                 />
               </label>

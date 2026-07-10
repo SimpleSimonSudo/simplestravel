@@ -166,6 +166,7 @@ export interface TripWithCountries extends Trip {
   countries: string[] | null;
   country_codes: string[] | null;
   post_count: number;
+  title_images: string[] | null;
 }
 
 // ────────────────────────────────────────────────────────────
