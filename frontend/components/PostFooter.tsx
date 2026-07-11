@@ -6,6 +6,7 @@ import { renderAvatarSvg } from "@/lib/avatars";
 type PostFooterProps = {
   postId: string | number;
   tripId: number;
+  hasCoords?: boolean;
 };
 
 const EMOJIS = [
@@ -33,10 +34,12 @@ const EMOJIS = [
   { type: "hearteyes", char: "😍" },
 ];
 
-export default function PostFooter({ postId, tripId }: PostFooterProps) {
+export default function PostFooter({ postId, tripId, hasCoords = false }: PostFooterProps) {
   // Reactions state
   const [reactions, setReactions] = useState<Record<string, number>>({});
   const [userReacted, setUserReacted] = useState<Record<string, boolean>>({});
+  const [reactors, setReactors] = useState<Record<string, string[]>>({});
+  const [activeReactorPopup, setActiveReactorPopup] = useState<string | null>(null);
   const [loadingReactions, setLoadingReactions] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
 
@@ -116,6 +119,7 @@ export default function PostFooter({ postId, tripId }: PostFooterProps) {
       if (data.success) {
         setReactions(data.reactions);
         setUserReacted(data.userReacted);
+        setReactors(data.reactors || {});
       }
     } catch (e) {
       console.error("Error loading reactions:", e);
@@ -132,11 +136,20 @@ export default function PostFooter({ postId, tripId }: PostFooterProps) {
 
     // Optimistic UI update
     const alreadyReacted = userReacted[type];
+    const currentVisitorName = visitor?.display_name || "Traveler";
+
     setUserReacted((prev) => ({ ...prev, [type]: !alreadyReacted }));
     setReactions((prev) => ({
       ...prev,
       [type]: (prev[type] || 0) + (alreadyReacted ? -1 : 1)
     }));
+    setReactors((prev) => {
+      const currentList = prev[type] || [];
+      const updatedList = alreadyReacted
+        ? currentList.filter((name) => name !== currentVisitorName)
+        : [...currentList, currentVisitorName];
+      return { ...prev, [type]: updatedList };
+    });
 
     try {
       const res = await fetch("/api/posts/reactions", {
@@ -152,6 +165,7 @@ export default function PostFooter({ postId, tripId }: PostFooterProps) {
       if (data.success) {
         setReactions(data.reactions);
         setUserReacted(data.userReacted);
+        setReactors(data.reactors || {});
       } else {
         // Rollback optimistic update
         setUserReacted((prev) => ({ ...prev, [type]: alreadyReacted }));
@@ -159,6 +173,13 @@ export default function PostFooter({ postId, tripId }: PostFooterProps) {
           ...prev,
           [type]: (prev[type] || 0) + (alreadyReacted ? 1 : -1)
         }));
+        setReactors((prev) => {
+          const currentList = prev[type] || [];
+          const updatedList = alreadyReacted
+            ? [...currentList, currentVisitorName]
+            : currentList.filter((name) => name !== currentVisitorName);
+          return { ...prev, [type]: updatedList };
+        });
         alert(data.message || "Failed to update reaction.");
       }
     } catch (err) {
@@ -168,6 +189,13 @@ export default function PostFooter({ postId, tripId }: PostFooterProps) {
         ...prev,
         [type]: (prev[type] || 0) + (alreadyReacted ? 1 : -1)
       }));
+      setReactors((prev) => {
+        const currentList = prev[type] || [];
+        const updatedList = alreadyReacted
+          ? [...currentList, currentVisitorName]
+          : currentList.filter((name) => name !== currentVisitorName);
+        return { ...prev, [type]: updatedList };
+      });
       alert("Connection error. Could not toggle reaction.");
     }
   };
@@ -213,24 +241,28 @@ export default function PostFooter({ postId, tripId }: PostFooterProps) {
       {/* Footer Bar */}
       <div className="flex items-center justify-between">
         {/* Left: Map Icon Link */}
-        <a
-          href={`/map?trip=${tripId}&lines=true&post=${postId}`}
-          className="text-dust hover:text-amber transition-all duration-300 flex items-center gap-1.5 text-2xs uppercase tracking-wider group font-semibold"
-          title="Show on map"
-        >
-          <svg
-            className="w-4 h-4 group-hover:scale-110 transition-transform duration-300"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2"
+        {hasCoords ? (
+          <a
+            href={`/map?trip=${tripId}&lines=true&post=${postId}`}
+            className="text-dust hover:text-amber transition-all duration-300 flex items-center gap-1.5 text-2xs uppercase tracking-wider group font-semibold"
+            title="Show on map"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-          </svg>
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-amber font-body">
-            Show on Map
-          </span>
-        </a>
+            <svg
+              className="w-4 h-4 group-hover:scale-110 transition-transform duration-300"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-amber font-body">
+              Show on Map
+            </span>
+          </a>
+        ) : (
+          <div />
+        )}
 
         {/* Right: Emoji Reactions & Comments Trigger */}
         <div className="flex items-center gap-4">
@@ -239,20 +271,78 @@ export default function PostFooter({ postId, tripId }: PostFooterProps) {
             {EMOJIS.filter((e) => (reactions[e.type] || 0) > 0 || userReacted[e.type]).map((react) => {
               const count = reactions[react.type] || 0;
               const active = userReacted[react.type];
+              const reactList = reactors[react.type] || [];
+              
+              // Format reactor tooltip
+              let tooltipText = "";
+              if (reactList.length > 0) {
+                if (reactList.length === 1) {
+                  tooltipText = `Reacted by ${reactList[0]}`;
+                } else if (reactList.length === 2) {
+                  tooltipText = `${reactList[0]} and ${reactList[1]}`;
+                } else if (reactList.length === 3) {
+                  tooltipText = `${reactList[0]}, ${reactList[1]} and ${reactList[2]}`;
+                } else {
+                  tooltipText = `${reactList[0]}, ${reactList[1]} and ${reactList.length - 2} others`;
+                }
+              }
+
               return (
-                <button
-                  key={react.type}
-                  onClick={() => handleReact(react.type)}
-                  className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border transition-all hover:scale-110 select-none ${
+                <div key={react.type} className="relative group flex items-center">
+                  <div className={`inline-flex items-center rounded-full border text-[10px] transition-all duration-200 select-none ${
                     active
-                      ? "bg-amber/15 border-amber/30 text-ink font-semibold"
-                      : "bg-cream/30 border-transparent text-dust hover:bg-cream/60 hover:text-ink"
-                  }`}
-                  title={react.type}
-                >
-                  <span>{react.char}</span>
-                  {count > 0 && <span className="tabular-nums font-semibold">{count}</span>}
-                </button>
+                      ? "bg-amber/10 border-amber/30 text-amber"
+                      : "bg-cream/10 border-ink/5 text-dust"
+                  }`}>
+                    {/* Emoji toggle trigger */}
+                    <button
+                      onClick={() => handleReact(react.type)}
+                      className="pl-2 pr-1.5 py-0.5 rounded-l-full hover:bg-amber/5 transition-colors"
+                      title={`React with ${react.type}`}
+                    >
+                      {react.char}
+                    </button>
+                    {/* Count trigger for details popup */}
+                    {count > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveReactorPopup(activeReactorPopup === react.type ? null : react.type);
+                        }}
+                        className={`pl-1.5 pr-2 py-0.5 border-l rounded-r-full hover:bg-amber/5 transition-colors font-semibold tabular-nums ${
+                          active ? "border-amber/20" : "border-ink/5"
+                        }`}
+                        title="View who reacted"
+                      >
+                        {count}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Desktop Hover Tooltip */}
+                  {reactList.length > 0 && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden md:group-hover:block bg-ink text-cream text-[10px] py-1.5 px-2.5 rounded shadow-md whitespace-nowrap z-30 font-body">
+                      {tooltipText}
+                    </div>
+                  )}
+
+                  {/* Click Popover (Desktop & Mobile) */}
+                  {activeReactorPopup === react.type && reactList.length > 0 && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setActiveReactorPopup(null)} />
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white border border-ink/10 rounded p-2.5 shadow-lg z-50 min-w-[120px] max-w-[200px] text-[10px] font-body text-ink animate-fade-in">
+                        <div className="font-bold border-b border-ink/5 pb-1 mb-1 text-center uppercase tracking-wider text-dust text-[8px]">
+                          Reacted by
+                        </div>
+                        <ul className="space-y-0.5 max-h-24 overflow-y-auto">
+                          {reactList.map((name, idx) => (
+                            <li key={idx} className="truncate text-center">{name}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  )}
+                </div>
               );
             })}
             

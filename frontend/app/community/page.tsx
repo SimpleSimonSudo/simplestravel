@@ -22,10 +22,16 @@ export default async function CommunityPage() {
     .select("country_id, name, iso_code")
     .order("name");
 
-  // Fetch recent posts list for tagging
+  // Fetch trips list for publisher filtering
+  const { data: trips } = await supabase
+    .from("trips")
+    .select("trip_id, trip_name")
+    .order("start_date", { ascending: false });
+
+  // Fetch recent posts list for tagging & filtering
   const { data: posts } = await supabase
     .from("posts")
-    .select("post_id, title, post_date")
+    .select("post_id, title, post_date, country_id, trip_id")
     .order("post_date", { ascending: false });
 
   return (
@@ -34,6 +40,7 @@ export default async function CommunityPage() {
         initialBoards={boards || []}
         countries={countries || []} 
         posts={posts || []} 
+        trips={trips || []}
       />
     </div>
   );

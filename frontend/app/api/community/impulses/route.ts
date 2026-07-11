@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 
+function getFirstImageUrl(mediaList: any[] | null): string | null {
+  if (!mediaList || mediaList.length === 0) return null;
+  const image = mediaList.find((m: any) => m.media_type === "image");
+  if (!image) return null;
+  return image.storage_path || image.original_url || null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -16,10 +23,28 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         community_visitors!inner (display_name, visitor_id, is_banned, avatar_id),
-        posts (title),
+        posts (
+          post_id,
+          title,
+          post_date,
+          actual_date,
+          city,
+          summary,
+          media (
+            storage_path,
+            original_url,
+            media_type
+          )
+        ),
         countries (name, name_de, iso_code),
         community_replies (reply_id),
-        community_reactions (reaction_type, visitor_id)
+        community_reactions (
+          reaction_type,
+          visitor_id,
+          community_visitors (
+            display_name
+          )
+        )
       `);
 
     if (boardId) {
@@ -46,14 +71,24 @@ export async function GET(request: NextRequest) {
       // Group reactions
       const reactionsCount: Record<string, number> = { heart: 0, sparkles: 0, globe: 0, funny: 0, applause: 0, rocket: 0, camera: 0 };
       const userReactions: string[] = [];
+      const reactors: Record<string, string[]> = {
+        heart: [], sparkles: [], globe: [], funny: [], applause: [], rocket: [], camera: []
+      };
 
       (impulse.community_reactions || []).forEach((r: any) => {
-        if (reactionsCount[r.reaction_type] !== undefined) {
-          reactionsCount[r.reaction_type] += 1;
+        const type = r.reaction_type;
+        const visitorName = r.community_visitors?.display_name || "Traveler";
+
+        if (reactionsCount[type] !== undefined) {
+          reactionsCount[type] += 1;
         }
+        if (reactors[type] === undefined) {
+          reactors[type] = [];
+        }
+        reactors[type].push(visitorName);
         if (currentVisitorId && r.visitor_id === currentVisitorId) {
-          if (!userReactions.includes(r.reaction_type)) {
-            userReactions.push(r.reaction_type);
+          if (!userReactions.includes(type)) {
+            userReactions.push(type);
           }
         }
       });
@@ -68,11 +103,20 @@ export async function GET(request: NextRequest) {
           display_name: impulse.community_visitors.display_name,
           avatar_id: impulse.community_visitors.avatar_id || "avatar_1",
         },
-        post: impulse.posts ? { post_id: impulse.post_id, title: impulse.posts.title } : null,
+        post: impulse.posts ? {
+          post_id: impulse.post_id,
+          title: impulse.posts.title,
+          post_date: impulse.posts.post_date,
+          actual_date: impulse.posts.actual_date,
+          city: impulse.posts.city,
+          summary: impulse.posts.summary,
+          thumbnail_url: getFirstImageUrl(impulse.posts.media)
+        } : null,
         country: impulse.countries ? { country_id: impulse.country_id, name: impulse.countries.name, iso_code: impulse.countries.iso_code } : null,
         reply_count: impulse.community_replies ? impulse.community_replies.length : 0,
         reactions: reactionsCount,
         user_reactions: userReactions,
+        reactors: reactors,
         updated_at: impulse.updated_at || null,
       };
     });
@@ -233,7 +277,19 @@ export async function POST(request: NextRequest) {
       .select(`
         *,
         community_visitors (display_name, visitor_id, avatar_id),
-        posts (title),
+        posts (
+          post_id,
+          title,
+          post_date,
+          actual_date,
+          city,
+          summary,
+          media (
+            storage_path,
+            original_url,
+            media_type
+          )
+        ),
         countries (name, name_de, iso_code)
       `)
       .single();
@@ -253,11 +309,20 @@ export async function POST(request: NextRequest) {
         display_name: inserted.community_visitors.display_name,
         avatar_id: inserted.community_visitors.avatar_id || "avatar_1",
       },
-      post: inserted.posts ? { post_id: inserted.post_id, title: inserted.posts.title } : null,
+      post: inserted.posts ? {
+        post_id: inserted.post_id,
+        title: inserted.posts.title,
+        post_date: inserted.posts.post_date,
+        actual_date: inserted.posts.actual_date,
+        city: inserted.posts.city,
+        summary: inserted.posts.summary,
+        thumbnail_url: getFirstImageUrl(inserted.posts.media)
+      } : null,
       country: inserted.countries ? { country_id: inserted.country_id, name: inserted.countries.name, iso_code: inserted.countries.iso_code } : null,
       reply_count: 0,
       reactions: { heart: 0, sparkles: 0, globe: 0, funny: 0, applause: 0, rocket: 0, camera: 0 },
       user_reactions: [],
+      reactors: { heart: [], sparkles: [], globe: [], funny: [], applause: [], rocket: [], camera: [] },
       updated_at: inserted.updated_at || null,
     };
 

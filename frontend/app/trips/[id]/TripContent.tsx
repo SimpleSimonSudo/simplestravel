@@ -175,7 +175,11 @@ export default function TripContent({ posts, fullPosts, media, tripId }: TripCon
                     </section>
 
                     {/* Interactive Post Footer (Map, Emojis, Impulse) */}
-                    <PostFooter postId={post.post_id} tripId={tripId} />
+                    <PostFooter
+                      postId={post.post_id}
+                      tripId={tripId}
+                      hasCoords={post.latitude !== null && post.longitude !== null}
+                    />
                   </article>
 
                   {/* Graphical decorative flourish separator between posts */}

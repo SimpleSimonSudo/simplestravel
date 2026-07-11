@@ -54,6 +54,8 @@ export default async function TripDetailPage({ params }: Props) {
         travel_mode,
         weather,
         mood,
+        latitude,
+        longitude,
         content_blocks,
         country:countries(name, iso_code)
       `)

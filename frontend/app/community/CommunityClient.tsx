@@ -13,6 +13,13 @@ interface Post {
   post_id: string;
   title: string | null;
   post_date: string;
+  country_id: number | null;
+  trip_id: number | null;
+}
+
+interface Trip {
+  trip_id: number;
+  trip_name: string;
 }
 
 interface Board {
@@ -35,11 +42,20 @@ interface Impulse {
   created_at: string;
   updated_at?: string | null;
   visitor: Visitor;
-  post: { post_id: string; title: string | null } | null;
+  post: {
+    post_id: string;
+    title: string | null;
+    post_date?: string;
+    actual_date?: string | null;
+    city?: string | null;
+    summary?: string | null;
+    thumbnail_url?: string | null;
+  } | null;
   country: { country_id: number; name: string; iso_code: string | null } | null;
   reply_count: number;
   reactions: Record<string, number>;
   user_reactions: string[];
+  reactors: Record<string, string[]>;
 }
 
 interface Reply {
@@ -55,9 +71,10 @@ interface CommunityClientProps {
   initialBoards: Board[];
   countries: Country[];
   posts: Post[];
+  trips: Trip[];
 }
 
-export default function CommunityClient({ initialBoards, countries, posts }: CommunityClientProps) {
+export default function CommunityClient({ initialBoards, countries, posts, trips }: CommunityClientProps) {
   const [mounted, setMounted] = useState(false);
   const publisherRef = useRef<HTMLDivElement>(null);
 
@@ -97,6 +114,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
   const [isPublisherExpanded, setIsPublisherExpanded] = useState(false);
   const [impulseText, setImpulseText] = useState("");
   const [selectedCountryId, setSelectedCountryId] = useState("");
+  const [selectedTripFilterId, setSelectedTripFilterId] = useState("");
   const [selectedPostId, setSelectedPostId] = useState("");
   const [submittingImpulse, setSubmittingImpulse] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -108,6 +126,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
   const [replyText, setReplyText] = useState("");
   const [submittingReply, setSubmittingReply] = useState(false);
   const [activePickerImpulseId, setActivePickerImpulseId] = useState<string | null>(null);
+  const [activeReactorPopup, setActiveReactorPopup] = useState<{ impulseId: string; type: string } | null>(null);
 
   // 1. Initial Load & Setup
   useEffect(() => {
@@ -227,6 +246,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
       } else {
         setImpulseText("");
         setSelectedCountryId("");
+        setSelectedTripFilterId("");
         setSelectedPostId("");
         setIsPublisherExpanded(false);
         // Prepend the new impulse
@@ -317,7 +337,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
 
   const handleReact = async (impulseId: string, type: string) => {
     if (!isVerified) {
-      alert("Please verify your profile first to react.");
+      alert("Please verify your profile before reacting.");
       return;
     }
 
@@ -332,25 +352,39 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (!res.ok) {
+        alert(data.message || "Failed to toggle reaction.");
+      } else {
+        const reacted = data.reacted;
         setImpulses((prev) =>
           prev.map((item) => {
             if (item.impulse_id === impulseId) {
               const nextReactions = { ...item.reactions };
               let nextUserReactions = [...item.user_reactions];
+              const nextReactors = { ...item.reactors };
 
-              if (data.reacted) {
+              if (reacted) {
                 nextReactions[type] = (nextReactions[type] || 0) + 1;
                 nextUserReactions.push(type);
+                if (nextReactors[type]) {
+                  if (!nextReactors[type].includes(displayName)) {
+                    nextReactors[type] = [...nextReactors[type], displayName];
+                  }
+                } else {
+                  nextReactors[type] = [displayName];
+                }
               } else {
                 nextReactions[type] = Math.max(0, (nextReactions[type] || 1) - 1);
                 nextUserReactions = nextUserReactions.filter((r) => r !== type);
+                if (nextReactors[type]) {
+                  nextReactors[type] = nextReactors[type].filter((name) => name !== displayName);
+                }
               }
-
               return {
                 ...item,
                 reactions: nextReactions,
                 user_reactions: nextUserReactions,
+                reactors: nextReactors,
               };
             }
             return item;
@@ -553,6 +587,16 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
     });
   };
 
+  const filteredPostsForTag = posts.filter((p) => {
+    if (selectedCountryId && p.country_id !== Number(selectedCountryId)) {
+      return false;
+    }
+    if (selectedTripFilterId && p.trip_id !== Number(selectedTripFilterId)) {
+      return false;
+    }
+    return true;
+  });
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 animate-fade-up">
       {/* Top Header Row with Title and Floating Settings Avatar */}
@@ -567,7 +611,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
           {!isVerified ? (
             <a
               href="/gate"
-              className="inline-flex items-center gap-2 py-2 px-4 bg-ink text-cream hover:bg-amber hover:text-white font-body text-3xs font-bold uppercase tracking-wider transition-all duration-300 rounded-sm shadow-sm"
+              className="inline-flex items-center gap-2 py-2 px-4 bg-ink text-cream hover:bg-amber hover:text-white font-body text-3xs font-bold uppercase tracking-wider transition-all duration-300 rounded-lg shadow-sm"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
@@ -592,7 +636,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                     onClick={() => setOpenSettings(false)}
                   ></div>
 
-                  <div className="absolute right-0 mt-3 w-64 bg-white border border-ink/10 shadow-lg p-5 rounded-sm z-50 animate-fade-in text-left">
+                  <div className="absolute right-0 mt-3 w-64 bg-white border border-ink/10 shadow-lg p-5 rounded-xl z-50 animate-fade-in text-left">
                     <span className="text-3xs uppercase tracking-widest text-dust font-body block mb-1">
                       Logged in as
                     </span>
@@ -631,7 +675,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                           Backup Recovery Code
                         </span>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="font-mono bg-cream/30 px-2 py-1 border border-ink/5 rounded-sm font-semibold tracking-wider text-ink select-all">
+                          <span className="font-mono bg-cream/30 px-2 py-1 border border-ink/5 rounded-md font-semibold tracking-wider text-ink select-all">
                             {recoveryCode}
                           </span>
                           <button
@@ -666,7 +710,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                             localStorage.clear();
                             window.location.reload();
                           }}
-                          className="py-1 px-3 text-red-600 hover:text-red-800 hover:bg-red-50 text-3xs uppercase font-bold tracking-wider font-body border border-red-100 transition-colors rounded-sm"
+                          className="py-1 px-3 text-red-600 hover:text-red-800 hover:bg-red-50 text-3xs uppercase font-bold tracking-wider font-body border border-red-100 transition-colors rounded-lg"
                         >
                           Logout
                         </button>
@@ -685,7 +729,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
         
         {/* LEFT COLUMN: Sidebar with Boards List Navigation */}
         <div className="md:col-span-3 space-y-4">
-          <div className="bg-white border border-ink/5 p-4 rounded-sm shadow-2xs">
+          <div className="bg-white border border-ink/5 p-4 rounded-xl shadow-xs">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-ink/5">
               <span className="font-display font-semibold text-sm text-ink uppercase tracking-wide">
                 Channels
@@ -715,7 +759,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                       setActiveBoard(b);
                       setIsPublisherExpanded(false);
                     }}
-                    className={`w-full text-left px-3 py-2 rounded-sm text-xs font-body transition-all flex items-center justify-between ${
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-body transition-all flex items-center justify-between ${
                       isActive
                         ? "bg-ink text-cream font-semibold shadow-xs"
                         : "text-dust hover:bg-cream/40 hover:text-ink"
@@ -729,7 +773,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
           </div>
 
           {activeBoard?.description && (
-            <div className="p-3 bg-cream/10 border border-ink/5 text-3xs text-dust/70 leading-relaxed font-body rounded-sm italic">
+            <div className="p-3 bg-cream/10 border border-ink/5 text-3xs text-dust/70 leading-relaxed font-body rounded-lg italic">
               {activeBoard.description}
             </div>
           )}
@@ -742,7 +786,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
           {isVerified && activeBoard && (
             <div
               ref={publisherRef}
-              className="bg-white border border-ink/5 rounded-sm shadow-xs transition-all duration-300"
+              className="bg-white border border-ink/5 rounded-xl shadow-sm transition-all duration-300"
               style={{
                 borderColor: isPublisherExpanded ? "var(--color-amber)" : "rgba(0, 0, 0, 0.05)",
                 boxShadow: isPublisherExpanded ? "0 4px 12px rgba(200, 134, 58, 0.08)" : "0 1px 3px rgba(0, 0, 0, 0.02)",
@@ -781,7 +825,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                   </div>
 
                   {/* Dynamic Fields Section (Fade in inside expanded publisher) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-ink/5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-ink/5">
                     {/* Country Tag */}
                     <div className="space-y-1">
                       <label htmlFor="countryTag" className="block text-[10px] uppercase font-bold tracking-wider text-dust/70 font-body">
@@ -792,12 +836,33 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                         value={selectedCountryId}
                         onChange={(e) => setSelectedCountryId(e.target.value)}
                         disabled={submittingImpulse}
-                        className="w-full bg-white border border-ink/10 rounded-sm px-2 py-1.5 text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors"
+                        className="w-full bg-white border border-ink/10 rounded-lg px-2 py-1.5 text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors cursor-pointer"
                       >
                         <option value="">-- No Country --</option>
                         {countries.map((c) => (
                           <option key={c.country_id} value={c.country_id}>
                             {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Trip Filter */}
+                    <div className="space-y-1">
+                      <label htmlFor="tripFilter" className="block text-[10px] uppercase font-bold tracking-wider text-dust/70 font-body">
+                        Filter by Trip (Optional)
+                      </label>
+                      <select
+                        id="tripFilter"
+                        value={selectedTripFilterId}
+                        onChange={(e) => setSelectedTripFilterId(e.target.value)}
+                        disabled={submittingImpulse}
+                        className="w-full bg-white border border-ink/10 rounded-lg px-2 py-1.5 text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors cursor-pointer"
+                      >
+                        <option value="">-- No Trip Filter --</option>
+                        {trips.map((t) => (
+                          <option key={t.trip_id} value={t.trip_id}>
+                            {t.trip_name}
                           </option>
                         ))}
                       </select>
@@ -811,12 +876,26 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                       <select
                         id="postTag"
                         value={selectedPostId}
-                        onChange={(e) => setSelectedPostId(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedPostId(val);
+                          if (val) {
+                            const post = posts.find((p) => p.post_id === val);
+                            if (post) {
+                              if (post.country_id) {
+                                setSelectedCountryId(String(post.country_id));
+                              }
+                              if (post.trip_id) {
+                                setSelectedTripFilterId(String(post.trip_id));
+                              }
+                            }
+                          }
+                        }}
                         disabled={submittingImpulse}
-                        className="w-full bg-white border border-ink/10 rounded-sm px-2 py-1.5 text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors"
+                        className="w-full bg-white border border-ink/10 rounded-lg px-2 py-1.5 text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors cursor-pointer"
                       >
                         <option value="">-- No Post Link --</option>
-                        {posts.map((p) => (
+                        {filteredPostsForTag.map((p) => (
                           <option key={p.post_id} value={p.post_id}>
                             {p.title || `Journal Entry #${p.post_id}`}
                           </option>
@@ -831,6 +910,9 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                       type="button"
                       onClick={() => {
                         setImpulseText("");
+                        setSelectedCountryId("");
+                        setSelectedTripFilterId("");
+                        setSelectedPostId("");
                         setIsPublisherExpanded(false);
                       }}
                       className="text-3xs uppercase font-bold tracking-wider text-dust hover:text-ink transition-colors font-body"
@@ -841,7 +923,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                       <button
                         type="submit"
                         disabled={submittingImpulse || !impulseText.trim()}
-                        className="py-2 px-5 bg-ink text-cream hover:bg-amber hover:text-white disabled:bg-dust/20 disabled:text-cream/50 font-body text-2xs font-bold uppercase tracking-wider transition-all duration-300 rounded-sm shadow-sm"
+                        className="py-2 px-5 bg-ink text-cream hover:bg-amber hover:text-white disabled:bg-dust/20 disabled:text-cream/50 font-body text-2xs font-bold uppercase tracking-wider transition-all duration-300 rounded-lg shadow-sm"
                       >
                         {submittingImpulse ? "Sharing..." : "Post Impulse"}
                       </button>
@@ -857,23 +939,23 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
             /* Skeleton Loading */
             <div className="space-y-6">
               {[1, 2, 3].map((n) => (
-                <div key={n} className="bg-white border border-ink/5 p-6 rounded-sm shadow-sm animate-pulse space-y-4">
+                <div key={n} className="bg-white border border-ink/5 p-6 rounded-xl shadow-md animate-pulse space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-cream/40 rounded-full"></div>
                     <div className="space-y-2">
-                      <div className="h-3.5 bg-cream/40 w-32 rounded-sm"></div>
-                      <div className="h-2 bg-cream/40 w-16 rounded-sm"></div>
+                      <div className="h-3.5 bg-cream/40 w-32 rounded-md"></div>
+                      <div className="h-2 bg-cream/40 w-16 rounded-md"></div>
                     </div>
                   </div>
                   <div className="space-y-2 pt-2">
-                    <div className="h-3 bg-cream/40 w-full rounded-sm"></div>
-                    <div className="h-3 bg-cream/40 w-5/6 rounded-sm"></div>
+                    <div className="h-3 bg-cream/40 w-full rounded-md"></div>
+                    <div className="h-3 bg-cream/40 w-5/6 rounded-md"></div>
                   </div>
                 </div>
               ))}
             </div>
           ) : impulses.length === 0 ? (
-            <div className="bg-white border border-ink/5 py-16 px-6 text-center rounded-sm shadow-2xs">
+            <div className="bg-white border border-ink/5 py-16 px-6 text-center rounded-xl shadow-xs">
               <div className="w-12 h-12 bg-cream/35 text-dust flex items-center justify-center rounded-full mx-auto mb-4 border border-ink/5">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -889,7 +971,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
               {impulses.map((impulse) => (
                 <div
                   key={impulse.impulse_id}
-                  className="bg-white border border-ink/5 p-6 rounded-sm shadow-sm hover:border-amber/20 transition-all duration-300"
+                  className="bg-white border border-ink/5 p-6 rounded-xl shadow-md hover:shadow-lg hover:border-amber/10 transition-all duration-300"
                 >
                   {/* Header info */}
                   <div className="flex items-start justify-between gap-4">
@@ -959,13 +1041,60 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                         </a>
                       )}
                       {impulse.post && (
-                        <a
-                          href={`/post/${impulse.post.post_id}`}
-                          className="tag flex items-center gap-1 hover:bg-amber/10 hover:text-amber transition-colors font-body text-[9px] tracking-normal max-w-[120px] truncate"
-                          title={impulse.post.title || ""}
-                        >
-                          📖 {impulse.post.title || "Post"}
-                        </a>
+                        <div className="relative group/post">
+                          <a
+                            href={`/post/${impulse.post.post_id}`}
+                            className="flex items-center gap-1 px-2.5 py-0.5 bg-amber/10 hover:bg-amber text-amber hover:text-white rounded-full transition-all duration-300 font-body text-[9px] font-semibold tracking-wider uppercase border border-amber/20 shrink-0"
+                          >
+                            <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                            <span>Linked Entry</span>
+                          </a>
+
+                          {/* Post Hover Card Preview */}
+                          <div className="absolute right-0 top-full mt-2 hidden group-hover/post:block bg-white border border-ink/10 rounded-xl shadow-xl z-50 min-w-[260px] max-w-[300px] overflow-hidden text-ink animate-fade-in pointer-events-none">
+                            {impulse.post.thumbnail_url && (
+                              <div className="relative w-full h-32 bg-cream/10">
+                                <img
+                                  src={impulse.post.thumbnail_url}
+                                  alt={impulse.post.title || "Preview"}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
+                            <div className="p-4 text-left">
+                              <div className="flex items-center gap-1.5 mb-1.5 text-[9px] text-dust font-bold uppercase tracking-wider font-body">
+                                {impulse.post.actual_date || impulse.post.post_date ? (
+                                  <span>
+                                    {new Date((impulse.post.actual_date || impulse.post.post_date)!).toLocaleDateString("en-GB", {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric"
+                                    })}
+                                  </span>
+                                ) : null}
+                                {impulse.post.city && (
+                                  <>
+                                    <span>·</span>
+                                    <span>{impulse.post.city}</span>
+                                  </>
+                                )}
+                              </div>
+                              <h4 className="font-display font-bold text-xs text-ink mb-2 leading-snug line-clamp-2">
+                                {impulse.post.title || "Diary Entry"}
+                              </h4>
+                              {impulse.post.summary && (
+                                <p className="text-dust line-clamp-2 leading-relaxed text-[10px] font-light bg-cream/10 p-2 border-l-2 border-amber/40 rounded-r-md">
+                                  {impulse.post.summary}
+                                </p>
+                              )}
+                              <div className="mt-3 text-right text-[9px] uppercase font-bold text-amber tracking-wide">
+                                Read Post &rarr;
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -977,7 +1106,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                          value={editingImpulseText}
                          onChange={(e) => setEditingImpulseText(e.target.value.slice(0, 3000))}
                          rows={4}
-                         className="w-full p-2 border border-ink/10 rounded-sm text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors resize-none bg-paper"
+                         className="w-full p-2 border border-ink/10 rounded-lg text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors resize-none bg-paper"
                       />
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] text-dust/50 font-body">
@@ -996,7 +1125,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                           <button
                             onClick={() => handleEditImpulse(impulse.impulse_id)}
                             disabled={!editingImpulseText.trim()}
-                            className="py-1 px-4 bg-ink text-cream hover:bg-amber hover:text-white disabled:bg-dust/20 disabled:text-cream/50 font-body text-3xs font-bold uppercase tracking-wider transition-colors rounded-sm shadow-sm"
+                            className="py-1 px-4 bg-ink text-cream hover:bg-amber hover:text-white disabled:bg-dust/20 disabled:text-cream/50 font-body text-3xs font-bold uppercase tracking-wider transition-colors rounded-lg shadow-sm"
                           >
                             Save
                           </button>
@@ -1038,19 +1167,82 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                       ].filter((react) => (impulse.reactions[react.type] || 0) > 0 || impulse.user_reactions.includes(react.type)).map((react) => {
                         const count = impulse.reactions[react.type] || 0;
                         const hasReacted = impulse.user_reactions.includes(react.type);
+                        const reactList = impulse.reactors?.[react.type] || [];
+                        
+                        // Format tooltip text
+                        let tooltipText = "";
+                        if (reactList.length > 0) {
+                          if (reactList.length === 1) {
+                            tooltipText = `Reacted by ${reactList[0]}`;
+                          } else if (reactList.length === 2) {
+                            tooltipText = `${reactList[0]} and ${reactList[1]}`;
+                          } else if (reactList.length === 3) {
+                            tooltipText = `${reactList[0]}, ${reactList[1]} and ${reactList[2]}`;
+                          } else {
+                            tooltipText = `${reactList[0]}, ${reactList[1]} and ${reactList.length - 2} others`;
+                          }
+                        }
+
+                        const isPopupOpen = activeReactorPopup?.impulseId === impulse.impulse_id && activeReactorPopup?.type === react.type;
+
                         return (
-                          <button
-                            key={react.type}
-                            onClick={() => handleReact(impulse.impulse_id, react.type)}
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-body transition-all duration-200 select-none ${
+                          <div key={react.type} className="relative group flex items-center">
+                            <div className={`inline-flex items-center rounded-full border text-[10px] font-body transition-all duration-200 select-none ${
                               hasReacted
-                                ? "bg-amber/10 border-amber/30 text-amber font-semibold shadow-2xs"
-                                : "bg-cream/10 border-ink/5 text-dust hover:bg-cream/30 hover:text-ink"
-                            }`}
-                          >
-                            <span>{react.icon}</span>
-                            <span>{count}</span>
-                          </button>
+                                ? "bg-amber/10 border-amber/30 text-amber"
+                                : "bg-cream/10 border-ink/5 text-dust"
+                            }`}>
+                              {/* Emoji toggle trigger */}
+                              <button
+                                onClick={() => handleReact(impulse.impulse_id, react.type)}
+                                className="pl-2 pr-1.5 py-0.5 rounded-l-full hover:bg-amber/5 transition-colors"
+                                title={`React with ${react.type}`}
+                              >
+                                {react.icon}
+                              </button>
+                              {/* Count trigger for details popup */}
+                              {count > 0 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveReactorPopup(
+                                      isPopupOpen ? null : { impulseId: impulse.impulse_id, type: react.type }
+                                    );
+                                  }}
+                                  className={`pl-1.5 pr-2 py-0.5 border-l rounded-r-full hover:bg-amber/5 transition-colors font-semibold tabular-nums ${
+                                    hasReacted ? "border-amber/20" : "border-ink/5"
+                                  }`}
+                                  title="View who reacted"
+                                >
+                                  {count}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Desktop Hover Tooltip */}
+                            {reactList.length > 0 && (
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden md:group-hover:block bg-ink text-cream text-[10px] py-1.5 px-2.5 rounded shadow-md whitespace-nowrap z-30 font-body">
+                                {tooltipText}
+                              </div>
+                            )}
+
+                            {/* Click Popover (Desktop & Mobile) */}
+                            {isPopupOpen && reactList.length > 0 && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={() => setActiveReactorPopup(null)} />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white border border-ink/10 rounded p-2.5 shadow-lg z-50 min-w-[120px] max-w-[200px] text-[10px] font-body text-ink animate-fade-in">
+                                  <div className="font-bold border-b border-ink/5 pb-1 mb-1 text-center uppercase tracking-wider text-dust text-[8px]">
+                                    Reacted by
+                                  </div>
+                                  <ul className="space-y-0.5 max-h-24 overflow-y-auto">
+                                    {reactList.map((name, idx) => (
+                                      <li key={idx} className="truncate text-center">{name}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         );
                       })}
 
@@ -1151,7 +1343,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                                 <div className="w-6 h-6 rounded-full overflow-hidden flex items-center justify-center select-none mt-0.5 shadow-xs bg-cream/10">
                                   {renderAvatarSvg(reply.visitor.avatar_id || "avatar_1", "w-6 h-6")}
                                 </div>
-                                <div className="flex-1 bg-cream/20 p-2.5 rounded-sm border border-ink/5">
+                                <div className="flex-1 bg-cream/20 p-2.5 rounded-lg border border-ink/5">
                                   <div className="flex justify-between items-baseline mb-1">
                                     <span className="font-body text-2xs font-bold text-ink">
                                       {reply.visitor.display_name}
@@ -1207,7 +1399,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                                         type="text"
                                         value={editingReplyText}
                                         onChange={(e) => setEditingReplyText(e.target.value.slice(0, 200))}
-                                        className="w-full px-2 py-1 border border-ink/10 rounded-sm text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors bg-white"
+                                        className="w-full px-2 py-1 border border-ink/10 rounded-lg text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors bg-white"
                                       />
                                       <div className="flex justify-between items-center text-[10px]">
                                         <span className="text-3xs text-dust/50 font-body">
@@ -1226,7 +1418,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                                           <button
                                             onClick={() => handleEditReply(reply.reply_id, impulse.impulse_id)}
                                             disabled={!editingReplyText.trim()}
-                                            className="bg-ink text-cream hover:bg-amber hover:text-white px-2 py-0.5 rounded-xs text-3xs font-bold uppercase transition-colors"
+                                            className="bg-ink text-cream hover:bg-amber hover:text-white px-2 py-0.5 rounded-lg text-3xs font-bold uppercase transition-colors"
                                           >
                                             Save
                                           </button>
@@ -1257,12 +1449,12 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
                             onChange={(e) => setReplyText(e.target.value.slice(0, 200))}
                             placeholder="Add a comment..."
                             disabled={submittingReply}
-                            className="flex-1 px-3 py-1.5 bg-cream/10 border border-ink/10 rounded-sm text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors"
+                            className="flex-1 px-3 py-1.5 bg-cream/10 border border-ink/10 rounded-lg text-xs font-body text-ink focus:outline-none focus:border-amber/40 transition-colors"
                           />
                           <button
                             type="submit"
                             disabled={submittingReply || !replyText.trim()}
-                            className="py-1.5 px-4 bg-ink text-cream hover:bg-amber hover:text-white disabled:bg-dust/20 disabled:text-cream/50 font-body text-3xs font-bold uppercase tracking-wider transition-colors rounded-sm"
+                            className="py-1.5 px-4 bg-ink text-cream hover:bg-amber hover:text-white disabled:bg-dust/20 disabled:text-cream/50 font-body text-3xs font-bold uppercase tracking-wider transition-colors rounded-lg"
                           >
                             Send
                           </button>
@@ -1288,7 +1480,7 @@ export default function CommunityClient({ initialBoards, countries, posts }: Com
       {/* CREATE NEW BOARD MODAL OVERLAY */}
       {openCreateBoardModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white border border-ink/10 p-6 max-w-sm w-full rounded-sm shadow-md animate-fade-up">
+          <div className="bg-white border border-ink/10 p-6 max-w-sm w-full rounded-xl shadow-xl animate-fade-up">
             <h3 className="font-display font-bold text-lg text-ink mb-2">Create New Channel</h3>
             <div className="amber-line mt-1 mb-4"></div>
 

@@ -29,6 +29,8 @@ export default async function HomePage() {
         travel_mode,
         weather,
         mood,
+        latitude,
+        longitude,
         content_blocks,
         country:countries(name, iso_code),
         trip:trips(trip_id, trip_name)
@@ -278,7 +280,11 @@ function RecentPostsSection({
                     </section>
 
                     {/* Interactive Post Footer (Map, Emojis, Impulse) */}
-                    <PostFooter postId={post.post_id} tripId={post.trip?.trip_id || post.trip_id || 0} />
+                    <PostFooter
+                      postId={post.post_id}
+                      tripId={post.trip?.trip_id || post.trip_id || 0}
+                      hasCoords={post.latitude !== null && post.longitude !== null}
+                    />
                   </article>
 
                   {/* Graphical decorative flourish separator between posts */}

@@ -187,7 +187,11 @@ export default async function PostDetailPage({ params }: Props) {
       {/* Interactive Post Footer (Map, Emojis, Impulse) */}
       {post.trip && (
         <section className="max-w-2xl mx-auto px-8">
-          <PostFooter postId={post.post_id} tripId={post.trip.trip_id} />
+          <PostFooter
+            postId={post.post_id}
+            tripId={post.trip.trip_id}
+            hasCoords={post.latitude !== null && post.longitude !== null}
+          />
         </section>
       )}
 

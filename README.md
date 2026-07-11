@@ -52,3 +52,27 @@ Um zu verhindern, dass bei den Trip-Titelbildern auf der Startseite Köpfe abges
 *   **`#title-top`**: Richtet den Bildausschnitt weiter oben aus (`center 15%`) – ideal, um abgeschnittene Köpfe zu vermeiden.
 *   **`#title-bottom`**: Richtet den Bildausschnitt weiter unten aus (`center 85%`).
 *   **`#title-XX`**: Setzt einen benutzerdefinierten vertikalen Prozentwert (z. B. `#title-30` für `center 30%` oder `#title-40` für `center 40%`).
+
+## Datenbank-Backup & Architektur-Blueprint
+
+Wir pflegen ein automatisiertes Daten- und Schemabackup sowie einen interaktiven Datenbank-Blueprint für Entwickler und Gemini-Agenten.
+
+### 1. Backup aktualisieren
+Um die lokale Kopie der Supabase-Datenbank zu aktualisieren, führe folgendes Skript im Hauptverzeichnis des Projekts aus:
+
+```bash
+./.venv/bin/python backup/backup_supabase.py
+```
+
+**Was passiert dabei?**
+- Es wird eine neue Backup-Zip-Datei `backup/supabase_backup_YYYYMMDD_HHMMSS.zip` erstellt.
+- **Speicherplatzoptimierung (Alte Backups überschreiben):** Um Speicherplatz zu sparen, löscht das Skript automatisch ältere zip-Backups und überschreibt die Links `backup/latest_backup.zip` sowie `backup/latest_backup.sql` mit dem neuesten Stand.
+- **Blueprint aktualisieren:** Die Datei [DATABASE_BLUEPRINT.md](file:///home/simple_simon/Codes/traveling_planet_earth/DATABASE_BLUEPRINT.md) im Hauptverzeichnis wird automatisch neu generiert, um den aktuellen Schema- und Datenzustand widerzuspiegeln.
+
+### 2. Datenbank-Blueprint (für Entwickler & Gemini-Agenten)
+Im Hauptverzeichnis befindet sich die Datei [DATABASE_BLUEPRINT.md](file:///home/simple_simon/Codes/traveling_planet_earth/DATABASE_BLUEPRINT.md). Sie enthält:
+- Ein aktuelles **Mermaid ER-Diagramm** mit allen Relationen, Primärschlüsseln (`PK`) und Fremdschlüsseln (`FK`).
+- Detaillierte Tabellenbeschreibungen, Datentypen, Standardwerte und Zeilenanzahlen.
+
+> [!TIP]
+> **Für Gemini-Agenten:** Wenn du einem Gemini-Agenten eine Aufgabe gibst, die die Datenbank betrifft, weise ihn darauf hin, zuerst die Datei [DATABASE_BLUEPRINT.md](file:///home/simple_simon/Codes/traveling_planet_earth/DATABASE_BLUEPRINT.md) zu lesen. Dadurch versteht er die Tabellenstruktur und Fremdschlüsselbeziehungen sofort und muss sich nicht mühsam durch SQL-Migrationsdateien hangeln.

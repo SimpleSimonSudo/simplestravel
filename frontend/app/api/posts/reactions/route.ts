@@ -31,19 +31,45 @@ export async function GET(request: NextRequest) {
     }
 
     const reactionsDb = post.reactions || {};
+    const allVisitorIdsSet = new Set<string>();
+    VALID_REACTIONS.forEach((type) => {
+      const list = reactionsDb[type] || [];
+      list.forEach((id: string) => allVisitorIdsSet.add(id));
+    });
+    const allVisitorIds = Array.from(allVisitorIdsSet);
+
+    let visitorNamesMap: Record<string, string> = {};
+    if (allVisitorIds.length > 0) {
+      const { data: visitors, error: visitorsErr } = await adminClient
+        .from("community_visitors")
+        .select("visitor_id, display_name")
+        .in("visitor_id", allVisitorIds);
+
+      if (!visitorsErr && visitors) {
+        visitors.forEach((v: any) => {
+          visitorNamesMap[v.visitor_id] = v.display_name;
+        });
+      }
+    }
+
     const formattedReactions: Record<string, number> = {};
     const userReacted: Record<string, boolean> = {};
+    const reactors: Record<string, string[]> = {};
 
     VALID_REACTIONS.forEach((type) => {
       const list = reactionsDb[type] || [];
       formattedReactions[type] = list.length;
       userReacted[type] = currentVisitorId ? list.includes(currentVisitorId) : false;
+      reactors[type] = list
+        .map((id: string) => visitorNamesMap[id] || "Traveler")
+        .filter(Boolean);
     });
 
     return NextResponse.json({
       success: true,
       reactions: formattedReactions,
-      userReacted
+      userReacted,
+      reactors
     });
   } catch (error) {
     console.error("Error in posts reactions GET:", error);
@@ -129,20 +155,46 @@ export async function POST(request: NextRequest) {
     }
 
     // Return updated totals
+    const allVisitorIdsSet = new Set<string>();
+    VALID_REACTIONS.forEach((type) => {
+      const list = updatedReactions[type] || [];
+      list.forEach((id: string) => allVisitorIdsSet.add(id));
+    });
+    const allVisitorIds = Array.from(allVisitorIdsSet);
+
+    let visitorNamesMap: Record<string, string> = {};
+    if (allVisitorIds.length > 0) {
+      const { data: visitors, error: visitorsErr } = await adminClient
+        .from("community_visitors")
+        .select("visitor_id, display_name")
+        .in("visitor_id", allVisitorIds);
+
+      if (!visitorsErr && visitors) {
+        visitors.forEach((v: any) => {
+          visitorNamesMap[v.visitor_id] = v.display_name;
+        });
+      }
+    }
+
     const formattedReactions: Record<string, number> = {};
     const userReacted: Record<string, boolean> = {};
+    const reactors: Record<string, string[]> = {};
 
     VALID_REACTIONS.forEach((type) => {
       const list = updatedReactions[type] || [];
       formattedReactions[type] = list.length;
       userReacted[type] = list.includes(visitorId);
+      reactors[type] = list
+        .map((id: string) => visitorNamesMap[id] || "Traveler")
+        .filter(Boolean);
     });
 
     return NextResponse.json({
       success: true,
       reacted,
       reactions: formattedReactions,
-      userReacted
+      userReacted,
+      reactors
     });
   } catch (error) {
     console.error("Error in posts reactions POST:", error);
