@@ -108,6 +108,15 @@ function renderImageBlock(block: any, blockIndex: number, mediaList: any[], post
         {blockMedia.map((media: any, i: number) => {
           const url = media.storage_path || media.original_url;
           const exif = media.exif_data;
+          const hasMetadata = !!(
+            media.camera_model ||
+            media.camera_make ||
+            media.lens ||
+            media.aperture ||
+            media.exposure_time ||
+            media.iso ||
+            media.focal_length
+          );
 
           const aspect = media.width && media.height ? `${media.width} / ${media.height}` : "3/2";
 
@@ -130,12 +139,12 @@ function renderImageBlock(block: any, blockIndex: number, mediaList: any[], post
               </div>
 
               {/* EXIF Info Popover */}
-              {exif && (
+              {exif && hasMetadata && (
                 <details className="absolute bottom-2 right-2 z-20 group/details">
-                  <summary className="list-none cursor-pointer p-1.5 rounded-full bg-ink/75 text-cream hover:bg-amber transition-colors flex items-center justify-center w-7 h-7 shadow-sm">
+                  <summary className="list-none cursor-pointer p-1 rounded-full bg-ink/75 text-cream hover:bg-amber transition-colors flex items-center justify-center w-6 h-6 shadow-sm">
                     <svg
-                      width="14"
-                      height="14"
+                      width="12"
+                      height="12"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"

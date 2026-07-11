@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const boardId = searchParams.get("board_id");
+    const postId = searchParams.get("post_id");
 
     const adminClient = createAdminClient();
     const currentVisitorId = request.cookies.get("visitor_profile")?.value;
@@ -23,6 +24,9 @@ export async function GET(request: NextRequest) {
 
     if (boardId) {
       query = query.eq("board_id", boardId);
+    }
+    if (postId) {
+      query = query.eq("post_id", postId);
     }
 
     const { data, error } = await query.order("created_at", { ascending: false });
@@ -90,16 +94,89 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { content, post_id, country_id, board_id } = body;
 
-    if (!board_id) {
-      return NextResponse.json({ success: false, message: "Missing board_id parameter." }, { status: 400 });
-    }
-
     const trimmedContent = (content || "").trim();
     if (!trimmedContent || trimmedContent.length < 3 || trimmedContent.length > 3000) {
       return NextResponse.json({ success: false, message: "Impulse text must be between 3 and 3000 characters." }, { status: 400 });
     }
 
     const adminClient = createAdminClient();
+
+    let finalBoardId = board_id;
+
+    if (!finalBoardId && post_id) {
+      // Find post's trip_id
+      const { data: postData, error: postErr } = await adminClient
+        .from("posts")
+        .select("trip_id")
+        .eq("post_id", post_id)
+        .single();
+
+      if (postErr || !postData) {
+        console.error("Error fetching post:", postErr);
+        return NextResponse.json({ success: false, message: "Associated post not found." }, { status: 404 });
+      }
+
+      const tripId = postData.trip_id;
+      if (!tripId) {
+        return NextResponse.json({ success: false, message: "Post is not associated with a trip." }, { status: 400 });
+      }
+
+      // Find trip_name
+      const { data: tripData, error: tripErr } = await adminClient
+        .from("trips")
+        .select("trip_name")
+        .eq("trip_id", tripId)
+        .single();
+
+      if (tripErr || !tripData) {
+        console.error("Error fetching trip details:", tripErr);
+        return NextResponse.json({ success: false, message: "Associated trip not found." }, { status: 404 });
+      }
+
+      const tripName = tripData.trip_name;
+
+      // Generate board name safely
+      let boardName = `Trip: ${tripName.trim()}`;
+      if (boardName.length > 50) {
+        boardName = boardName.substring(0, 47) + "...";
+      }
+      if (boardName.length < 2) {
+        boardName = `Trip ${tripId}`;
+      }
+
+      // Check if board exists
+      const { data: existingBoard } = await adminClient
+        .from("community_boards")
+        .select("board_id")
+        .eq("name", boardName)
+        .maybeSingle();
+
+      if (existingBoard) {
+        finalBoardId = existingBoard.board_id;
+      } else {
+        // Create board automatically
+        const { data: newBoard, error: createBoardErr } = await adminClient
+          .from("community_boards")
+          .insert({
+            name: boardName,
+            description: `Discussion and impulses for the trip: ${tripName.trim()}`,
+            created_by: visitorId
+          })
+          .select()
+          .single();
+
+        if (createBoardErr || !newBoard) {
+          console.error("Error creating trip board automatically:", createBoardErr);
+          return NextResponse.json({ success: false, message: "Error creating trip board." }, { status: 500 });
+        }
+
+        finalBoardId = newBoard.board_id;
+      }
+    }
+
+    if (!finalBoardId) {
+      return NextResponse.json({ success: false, message: "Missing board_id parameter." }, { status: 400 });
+    }
 
     // Verify visitor is not banned
     const { data: visitor, error: visitorErr } = await adminClient
@@ -137,7 +214,7 @@ export async function POST(request: NextRequest) {
     const { count: boardExists } = await adminClient
       .from("community_boards")
       .select("board_id", { count: "exact", head: true })
-      .eq("board_id", board_id);
+      .eq("board_id", finalBoardId);
 
     if (!boardExists || boardExists === 0) {
       return NextResponse.json({ success: false, message: "Selected board does not exist." }, { status: 404 });
@@ -148,7 +225,7 @@ export async function POST(request: NextRequest) {
       .from("community_impulses")
       .insert({
         visitor_id: visitorId,
-        board_id: board_id,
+        board_id: finalBoardId,
         content: trimmedContent,
         post_id: post_id || null,
         country_id: country_id ? parseInt(country_id, 10) : null

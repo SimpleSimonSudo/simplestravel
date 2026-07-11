@@ -1,12 +1,46 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import type { TripWithCountries } from "@/lib/types";
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isJournalDropdownOpen, setIsJournalDropdownOpen] = useState(false);
+  const [trips, setTrips] = useState<TripWithCountries[]>([]);
   const pathname = usePathname();
   const isMapPage = pathname === "/map";
+
+  useEffect(() => {
+    async function fetchTrips() {
+      try {
+        const { data, error } = await supabase
+          .from("trips_with_countries")
+          .select("*")
+          .order("start_date", { ascending: false, nullsFirst: false });
+
+        if (error) {
+          console.error("Error fetching trips for header:", error);
+          return;
+        }
+
+        // Filter out Tiny Journeys (trips with post_count < 10)
+        const filtered = ((data as TripWithCountries[]) ?? []).filter((trip) => trip.post_count >= 10);
+        setTrips(filtered);
+      } catch (err) {
+        console.error("Failed to fetch trips for header:", err);
+      }
+    }
+    fetchTrips();
+  }, []);
+
+  const toggleMenu = () => {
+    setIsOpen(!isOpen);
+    if (isOpen) {
+      setIsJournalDropdownOpen(false);
+    }
+  };
 
   // Dynamic header styles based on page type (light vs dark map)
   const headerBg = isOpen
@@ -21,6 +55,12 @@ export default function Header() {
 
   const logoColor = isMapPage ? "#f4ede0" : "#0d0c0b";
   const navColor = isMapPage ? "#e8dfd0" : "#6b6359";
+
+  const dropdownBg = isMapPage ? "var(--color-smoke)" : "var(--color-paper)";
+  const dropdownTextColor = isMapPage ? "var(--color-paper)" : "var(--color-ink)";
+  const itemHoverClass = isMapPage 
+    ? "hover:bg-mist hover:text-amber" 
+    : "hover:bg-cream hover:text-amber";
 
   return (
     <header
@@ -46,7 +86,29 @@ export default function Header() {
 
         {/* Desktop Nav links */}
         <nav className="hidden md:flex items-center gap-8">
-          <NavLink href="/" color={navColor}>Journal</NavLink>
+          <div className="relative group py-2">
+            <NavLink href="/" color={navColor}>Journal</NavLink>
+            {trips.length > 0 && (
+              <div 
+                className="absolute top-full left-0 mt-1 w-64 rounded-sm shadow-md opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-200 z-50 py-2 border font-body text-sm"
+                style={{
+                  backgroundColor: dropdownBg,
+                  borderColor: isMapPage ? "rgba(255, 255, 255, 0.15)" : "var(--color-cream)",
+                  color: dropdownTextColor
+                }}
+              >
+                {trips.map((trip) => (
+                  <a
+                    key={trip.trip_id}
+                    href={`/trips/${trip.trip_id}`}
+                    className={`block px-4 py-2.5 transition-colors font-medium text-[13px] tracking-wide ${itemHoverClass}`}
+                  >
+                    {trip.trip_name}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
           <NavLink href="/countries" color={navColor}>Countries</NavLink>
           <NavLink href="/map" color={navColor}>Map</NavLink>
           <NavLink href="/community" color={navColor}>Community</NavLink>
@@ -54,7 +116,7 @@ export default function Header() {
 
         {/* Mobile menu toggle button */}
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={toggleMenu}
           className="md:hidden hover:text-amber transition-colors focus:outline-none"
           style={{ color: navColor }}
           aria-label="Menu"
@@ -85,7 +147,49 @@ export default function Header() {
             borderColor: isMapPage ? "rgba(255, 255, 255, 0.1)" : "rgba(13, 12, 11, 0.05)"
           }}
         >
-          <NavLink href="/" onClick={() => setIsOpen(false)} color={navColor}>Journal</NavLink>
+          <div className="flex flex-col">
+            <div className="flex items-center justify-between">
+              <NavLink href="/" onClick={() => setIsOpen(false)} color={navColor}>Journal</NavLink>
+              {trips.length > 0 && (
+                <button
+                  onClick={() => setIsJournalDropdownOpen(!isJournalDropdownOpen)}
+                  className="p-2 -mr-2 transition-colors focus:outline-none"
+                  style={{ color: navColor }}
+                  aria-label="Toggle Trips Submenu"
+                >
+                  <svg 
+                    className={`w-4 h-4 transform transition-transform duration-200 ${isJournalDropdownOpen ? "rotate-90" : ""}`} 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor" 
+                    strokeWidth="2"
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            
+            {isJournalDropdownOpen && trips.length > 0 && (
+              <div className="pl-4 mt-2 mb-1 flex flex-col gap-3 border-l border-amber/35">
+                {trips.map((trip) => (
+                  <a
+                    key={trip.trip_id}
+                    href={`/trips/${trip.trip_id}`}
+                    onClick={() => {
+                      setIsOpen(false);
+                      setIsJournalDropdownOpen(false);
+                    }}
+                    className="text-xs uppercase tracking-widest font-body py-1 hover:text-amber transition-colors"
+                    style={{ color: navColor }}
+                  >
+                    {trip.trip_name}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
           <NavLink href="/countries" onClick={() => setIsOpen(false)} color={navColor}>Countries</NavLink>
           <NavLink href="/map" onClick={() => setIsOpen(false)} color={navColor}>Map</NavLink>
           <NavLink href="/community" onClick={() => setIsOpen(false)} color={navColor}>Community</NavLink>

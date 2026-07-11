@@ -3,6 +3,9 @@ import type { TripWithCountries } from "@/lib/types";
 import { createServerClient } from "@/lib/supabase";
 import ContentBlocksRenderer from "@/components/ContentBlocksRenderer";
 import TripsList from "@/components/TripsList";
+import PostFooter from "@/components/PostFooter";
+import PostSeparator from "@/components/PostSeparators";
+import PostDetailsDropdown from "@/components/PostDetailsDropdown";
 
 // Revalidate every 60s (server-side caching)
 export const revalidate = 60;
@@ -221,59 +224,46 @@ function RecentPostsSection({
               return (
                 <div key={post.post_id}>
                   <article className="space-y-6">
-                    {/* Metadata line */}
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-dust font-body">
-                      <time className="font-semibold text-ink tabular-nums">
-                        {pDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                      </time>
-                      <span className="text-dust/40">·</span>
-                      <span>
-                        {post.city && `${post.city}, `}
-                        {postCountry?.name || post.country?.name}
-                      </span>
-                      {post.travel_mode && (
-                        <>
-                          <span className="text-dust/40">·</span>
-                          <span className="uppercase tracking-widest text-[10px] bg-cream text-dust px-1.5 py-0.5 rounded-sm font-body">
-                            {post.travel_mode}
-                          </span>
-                        </>
-                      )}
-                      {post.trip?.trip_name && (
-                        <>
-                          <span className="text-dust/40">·</span>
-                          <a
-                            href={`/trips/${post.trip.trip_id}`}
-                            className="tag !bg-cream/40 hover:!bg-amber hover:!text-white transition-colors"
-                          >
-                            {post.trip.trip_name}
-                          </a>
-                        </>
+                    {/* Metadata and details line */}
+                    <div className="flex justify-between items-center w-full relative pb-2 border-b border-ink/5">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-dust font-body">
+                        <time className="font-semibold text-ink tabular-nums">
+                          {pDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        </time>
+                        <span className="text-dust/40">·</span>
+                        <span>
+                          {post.city && `${post.city}, `}
+                          {postCountry?.name || post.country?.name}
+                        </span>
+                        {post.trip?.trip_name && (
+                          <>
+                            <span className="text-dust/40">·</span>
+                            <a
+                              href={`/trips/${post.trip.trip_id}`}
+                              className="tag !bg-cream/40 hover:!bg-amber hover:!text-white transition-colors"
+                            >
+                              {post.trip.trip_name}
+                            </a>
+                          </>
+                        )}
+                      </div>
+                      {(post.travel_mode || post.weather || post.mood) && (
+                        <PostDetailsDropdown post={post} />
                       )}
                     </div>
 
                     {/* Inline post title */}
                     {post.title && (
-                      <h3 className="font-display font-black text-2xl md:text-3xl text-ink leading-tight">
-                        {post.title}
-                      </h3>
-                    )}
-
-                    {/* Weather/Mood bar */}
-                    {(post.weather || post.mood) && (
-                      <div className="flex flex-wrap gap-4 text-xs font-body text-dust py-2 border-y border-ink/5">
-                        {post.weather && (
-                          <div className="flex items-center">
-                            <span className="overline text-[10px] text-dust/60 mr-1.5 select-none">Weather:</span>
-                            <span className="text-ink font-medium">{post.weather}</span>
-                          </div>
-                        )}
-                        {post.mood && (
-                          <div className="flex items-center">
-                            <span className="overline text-[10px] text-dust/60 mr-1.5 select-none">Mood:</span>
-                            <span className="text-ink font-medium">{post.mood}</span>
-                          </div>
-                        )}
+                      <div className="flex justify-center w-full py-1">
+                        <h3 className="font-display font-bold text-lg md:text-xl text-center">
+                          <a 
+                            href={`/post/${post.post_id}`} 
+                            className="text-ink hover:text-amber transition-colors duration-300 relative group"
+                          >
+                            {post.title}
+                            <span className="absolute left-0 right-0 bottom-0 h-[1px] bg-amber/0 group-hover:bg-amber/40 transition-colors duration-300" />
+                          </a>
+                        </h3>
                       </div>
                     )}
 
@@ -286,15 +276,14 @@ function RecentPostsSection({
                         headingShift={true}
                       />
                     </section>
+
+                    {/* Interactive Post Footer (Map, Emojis, Impulse) */}
+                    <PostFooter postId={post.post_id} tripId={post.trip?.trip_id || post.trip_id || 0} />
                   </article>
 
-                  {/* Separator between posts */}
+                  {/* Graphical decorative flourish separator between posts */}
                   {index < posts.length - 1 && (
-                    <div className="flex items-center justify-center my-16 select-none" aria-hidden="true">
-                      <div className="w-16 h-[1px] bg-ink/10" />
-                      <div className="w-1.5 h-1.5 rotate-45 bg-amber/75 mx-4" />
-                      <div className="w-16 h-[1px] bg-ink/10" />
-                    </div>
+                    <PostSeparator postId={post.post_id} />
                   )}
                 </div>
               );

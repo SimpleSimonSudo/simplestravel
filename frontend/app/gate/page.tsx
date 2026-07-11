@@ -253,8 +253,10 @@ export default function GatePage() {
         }
       }
 
-      // Success: redirect to homepage
-      window.location.href = "/";
+      // Success: redirect to redirect parameter or homepage
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get("redirect");
+      window.location.href = redirect || "/";
     } catch (err) {
       console.error(err);
       setError("Connection faded a little — please retry");

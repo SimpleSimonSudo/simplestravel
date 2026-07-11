@@ -43,3 +43,12 @@ Um deine lokalen Änderungen auf Cloudflare Pages zu veröffentlichen (z. B. auf
 
 start venv:
 source .venv/bin/activate
+
+## Titelbilder-Ausschnitt (Focal Point Override)
+
+Um zu verhindern, dass bei den Trip-Titelbildern auf der Startseite Köpfe abgeschnitten werden oder nur der Himmel sichtbar ist, kannst du den Bildausschnitt (Focal Point) manuell steuern. Tagge das entsprechende Bild in Tumblr zusätzlich oder anstelle von `#title` mit einem der folgenden Tags:
+
+*   **`#title`** oder **`#title-center`**: Richtet den Bildausschnitt standardmäßig mittig aus (`center 50%`).
+*   **`#title-top`**: Richtet den Bildausschnitt weiter oben aus (`center 15%`) – ideal, um abgeschnittene Köpfe zu vermeiden.
+*   **`#title-bottom`**: Richtet den Bildausschnitt weiter unten aus (`center 85%`).
+*   **`#title-XX`**: Setzt einen benutzerdefinierten vertikalen Prozentwert (z. B. `#title-30` für `center 30%` oder `#title-40` für `center 40%`).

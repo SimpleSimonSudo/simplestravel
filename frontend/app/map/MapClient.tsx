@@ -95,6 +95,25 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
   const [selectedTripId, setSelectedTripId] = useState<string>("all");
   const [showLines, setShowLines] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const tripParam = searchParams.get("trip");
+      const linesParam = searchParams.get("lines");
+      const postParam = searchParams.get("post");
+      if (tripParam) {
+        setSelectedTripId(tripParam);
+      }
+      if (linesParam === "true") {
+        setShowLines(true);
+      }
+      if (postParam) {
+        setSelectedPostId(postParam);
+      }
+    }
+  }, []);
 
   const mapInstanceRef = useRef<any>(null);
   const maplibreglRef = useRef<any>(null);
@@ -492,15 +511,65 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
       bounds.push([post.longitude, post.latitude]);
     });
 
-    // Zoom and frame filtered posts when selecting a specific trip
-    if (selectedTripId !== "all" && bounds.length > 0) {
-      const lngs = bounds.map((b) => b[0]);
-      const lats = bounds.map((b) => b[1]);
-      const minLng = Math.min(...lngs);
-      const maxLng = Math.max(...lngs);
-      const minLat = Math.min(...lats);
-      const maxLat = Math.max(...lats);
-      map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 80, maxZoom: 8 });
+    // Zoom and frame filtered posts when selecting a specific trip (outlier-resistant focusing)
+    if (selectedPostId) {
+      const targetPost = filteredPosts.find(p => String(p.post_id) === selectedPostId);
+      if (targetPost) {
+        map.setCenter([targetPost.longitude, targetPost.latitude]);
+        map.setZoom(10);
+        const idx = filteredPosts.findIndex(p => String(p.post_id) === selectedPostId);
+        if (idx !== -1 && markersRef.current[idx]) {
+          markersRef.current[idx].togglePopup();
+        }
+      }
+    } else if (selectedTripId !== "all" && bounds.length > 0) {
+      if (bounds.length === 1) {
+        map.setCenter([bounds[0][0], bounds[0][1]]);
+        map.setZoom(6);
+      } else if (bounds.length === 2) {
+        const lngs = bounds.map((b) => b[0]);
+        const lats = bounds.map((b) => b[1]);
+        map.fitBounds(
+          [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+          { padding: 80, maxZoom: 8 }
+        );
+      } else {
+        // Find median center of current trip
+        const sortedLngs = [...bounds].map(b => b[0]).sort((a, b) => a - b);
+        const sortedLats = [...bounds].map(b => b[1]).sort((a, b) => a - b);
+        const mid = Math.floor(bounds.length / 2);
+        const medianLng = bounds.length % 2 !== 0 ? sortedLngs[mid] : (sortedLngs[mid - 1] + sortedLngs[mid]) / 2;
+        const medianLat = bounds.length % 2 !== 0 ? sortedLats[mid] : (sortedLats[mid - 1] + sortedLats[mid]) / 2;
+
+        // Calculate distance squared from median for each point to identify outliers
+        const pointsWithDistance = bounds.map(p => {
+          const dLng = p[0] - medianLng;
+          const dLat = p[1] - medianLat;
+          return {
+            point: p,
+            distSq: dLng * dLng + dLat * dLat
+          };
+        });
+
+        // Sort points by distance to median ascending
+        pointsWithDistance.sort((a, b) => a.distSq - b.distSq);
+
+        // Keep the closest 80% of points for focus bounds (minimum of 2 points) to ignore remote starts/ends
+        const keepCount = Math.max(2, Math.ceil(bounds.length * 0.8));
+        const focusedPoints = pointsWithDistance.slice(0, keepCount).map(p => p.point);
+
+        const lngs = focusedPoints.map((b) => b[0]);
+        const lats = focusedPoints.map((b) => b[1]);
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+
+        map.fitBounds(
+          [[minLng, minLat], [maxLng, maxLat]],
+          { padding: 80, maxZoom: 8 }
+        );
+      }
     }
 
     // 2. Rebuild Curved Travel Lines GeoJSON
@@ -544,7 +613,7 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
     if (map.getLayer("travel-lines-layer")) {
       map.setLayoutProperty("travel-lines-layer", "visibility", showLines ? "visible" : "none");
     }
-  }, [mapLoaded, filteredPosts, showLines, selectedTripId]);
+  }, [mapLoaded, filteredPosts, showLines, selectedTripId, selectedPostId]);
 
 
 
@@ -863,6 +932,14 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
           border: 1px solid rgba(0, 0, 0, 0.05);
           box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
           padding: 0 !important;
+          outline: none !important;
+        }
+        .custom-maplibre-popup .maplibregl-popup-content:focus,
+        .custom-maplibre-popup .maplibregl-popup-content:focus-visible,
+        .custom-maplibre-popup .maplibregl-popup-content *:focus,
+        .custom-maplibre-popup .maplibregl-popup-content *:focus-visible {
+          outline: none !important;
+          box-shadow: none !important;
         }
         .custom-maplibre-popup .maplibregl-popup-tip {
           border-top-color: rgba(255, 255, 255, 0.98) !important;

@@ -80,6 +80,34 @@ function TripSlideshow({ images }: { images: string[] }) {
     );
   }
 
+  // Parse tag and url for each image to resolve custom focal points
+  const parsedImages = images.map((item) => {
+    const parts = item.split("::");
+    let tag = "#title";
+    let url = item;
+    if (parts.length > 1) {
+      tag = parts[0];
+      url = parts[1];
+    }
+
+    // Default crop is center (50%) if tag is #title or #title-center
+    let backgroundPosition = "center 50%";
+    if (tag === "#title-top") {
+      backgroundPosition = "center 15%";
+    } else if (tag === "#title-bottom") {
+      backgroundPosition = "center 85%";
+    } else if (tag === "#title-center" || tag === "#title") {
+      backgroundPosition = "center 50%";
+    } else if (tag.startsWith("#title-")) {
+      const customOffset = tag.replace("#title-", "");
+      if (!isNaN(Number(customOffset))) {
+        backgroundPosition = `center ${customOffset}%`;
+      }
+    }
+
+    return { url, backgroundPosition };
+  });
+
   return (
     <div className="absolute inset-0 bg-ink overflow-hidden select-none pointer-events-none">
       <style dangerouslySetInnerHTML={{
@@ -92,12 +120,13 @@ function TripSlideshow({ images }: { images: string[] }) {
           animation: kenBurns 24s ease-in-out infinite alternate;
         }
       `}} />
-      {images.map((img, i) => (
+      {parsedImages.map((img, i) => (
         <div
-          key={img}
-          className="absolute inset-0 bg-cover bg-center animate-ken-burns"
+          key={img.url}
+          className="absolute inset-0 bg-cover animate-ken-burns"
           style={{
-            backgroundImage: `url(${img})`,
+            backgroundImage: `url(${img.url})`,
+            backgroundPosition: img.backgroundPosition,
             opacity: i === index ? 1 : 0,
             zIndex: i === index ? 1 : 0,
             transition: "opacity 3000ms cubic-bezier(0.4, 0, 0.2, 1)", // 3 seconds ultra-smooth transition

@@ -2,6 +2,10 @@ import { getPost } from "@/lib/queries";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import ContentBlocksRenderer from "@/components/ContentBlocksRenderer";
+import TripMiniMap from "@/components/TripMiniMap";
+import PostFooter from "@/components/PostFooter";
+import PostSeparator from "@/components/PostSeparators";
+import PostDetailsDropdown from "@/components/PostDetailsDropdown";
 
 // Dynamic routing parameter
 type Props = {
@@ -162,31 +166,15 @@ export default async function PostDetailPage({ params }: Props) {
         </>
       )}
 
-      {/* Meta Grid (Weather, Mood, Transport) */}
-      {((post.weather) || (post.mood) || (post.travel_mode)) && (
-        <section className="max-w-3xl mx-auto px-8 mb-12">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-6 bg-cream/30 border border-cream rounded-sm font-body text-xs text-dust">
-            {post.weather && (
-              <div className="flex flex-col gap-1">
-                <span className="overline">Weather</span>
-                <span className="text-ink font-medium">{post.weather}</span>
-              </div>
-            )}
-            {post.mood && (
-              <div className="flex flex-col gap-1">
-                <span className="overline">Mood</span>
-                <span className="text-ink font-medium">{post.mood}</span>
-              </div>
-            )}
-            {post.travel_mode && (
-              <div className="flex flex-col gap-1">
-                <span className="overline">Transport</span>
-                <span className="text-ink font-medium uppercase tracking-wide">{post.travel_mode}</span>
-              </div>
-            )}
+      {/* Decorative separator with subtle details dropdown */}
+      <section className="max-w-2xl mx-auto px-8 mb-12 flex items-center justify-center relative">
+        <PostSeparator postId={post.post_id} />
+        {((post.weather) || (post.mood) || (post.travel_mode)) && (
+          <div className="absolute right-8 top-1/2 -translate-y-1/2">
+            <PostDetailsDropdown post={post} />
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* Content Blocks */}
       <section className="max-w-2xl mx-auto px-8 font-body leading-relaxed text-ink space-y-8">
@@ -195,6 +183,32 @@ export default async function PostDetailPage({ params }: Props) {
           mediaList={media}
         />
       </section>
+
+      {/* Interactive Post Footer (Map, Emojis, Impulse) */}
+      {post.trip && (
+        <section className="max-w-2xl mx-auto px-8">
+          <PostFooter postId={post.post_id} tripId={post.trip.trip_id} />
+        </section>
+      )}
+
+      {/* Post Location Map */}
+      {post.latitude !== null && post.longitude !== null && (
+        <section className="max-w-2xl mx-auto px-8 my-16 flex flex-col items-center">
+          <span className="overline text-2xs mb-3 text-center block">Post Location</span>
+          <TripMiniMap 
+            posts={[{
+              post_id: post.post_id,
+              title: post.title,
+              latitude: Number(post.latitude),
+              longitude: Number(post.longitude),
+              city: post.city
+            }]} 
+            tripId={post.trip?.trip_id} 
+            defaultZoom={12}
+            className="w-full h-[220px] md:h-[300px] border border-ink/10 rounded-sm bg-white overflow-hidden relative shadow-xs group transition-shadow duration-300 hover:shadow-md"
+          />
+        </section>
+      )}
 
       {/* Footer Section */}
       {((post.tags && post.tags.length > 0) || post.trip) && (

@@ -1,17 +1,84 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import ContentBlocksRenderer from "@/components/ContentBlocksRenderer";
+import PostFooter from "@/components/PostFooter";
+import PostSeparator from "@/components/PostSeparators";
+import PostDetailsDropdown from "@/components/PostDetailsDropdown";
 
 type TripContentProps = {
   posts: any[];
   fullPosts: any[];
   media: any[];
+  tripId: number;
 };
 
-export default function TripContent({ posts, fullPosts, media }: TripContentProps) {
+
+
+
+
+export default function TripContent({ posts, fullPosts, media, tripId }: TripContentProps) {
   const [viewMode, setViewMode] = useState<"journal" | "timeline">("journal");
+  const [showNav, setShowNav] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const navRef = useRef<HTMLDivElement>(null);
+
+  // Extract unique countries in chronological order of their first appearance
+  const countriesInTrip: { name: string; postId: string; isoCode?: string }[] = [];
+  const seenCountries = new Set<string>();
+
+  fullPosts.forEach((post) => {
+    const countryName = post.country?.name;
+    if (countryName) {
+      if (!seenCountries.has(countryName)) {
+        seenCountries.add(countryName);
+        countriesInTrip.push({
+          name: countryName,
+          postId: post.post_id,
+          isoCode: post.country?.iso_code,
+        });
+      }
+    }
+  });
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowNav(true);
+      } else {
+        setShowNav(false);
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setIsOpen(false);
+  };
+
+  const scrollToPost = (postId: string) => {
+    const element = document.getElementById(`post-${postId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+    setIsOpen(false);
+  };
 
   if (posts.length === 0) {
     return (
@@ -63,50 +130,37 @@ export default function TripContent({ posts, fullPosts, media }: TripContentProp
               const postCountry = post.country as any;
 
               return (
-                <div key={post.post_id} className="scroll-mt-32">
+                <div key={post.post_id} id={`post-${post.post_id}`} className="scroll-mt-32">
                   <article className="space-y-6">
-                    {/* Metadata line */}
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-dust font-body">
-                      <time className="font-semibold text-ink tabular-nums">
-                        {pDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                      </time>
-                      <span className="text-dust/40">·</span>
-                      <span>
-                        {post.city && `${post.city}, `}
-                        {postCountry?.name || post.country?.name}
-                      </span>
-                      {post.travel_mode && (
-                        <>
-                          <span className="text-dust/40">·</span>
-                          <span className="uppercase tracking-widest text-[10px] bg-cream text-dust px-1.5 py-0.5 rounded-sm font-body">
-                            {post.travel_mode}
-                          </span>
-                        </>
+                    {/* Metadata and details line */}
+                    <div className="flex justify-between items-center w-full relative pb-2 border-b border-ink/5">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-dust font-body">
+                        <time className="font-semibold text-ink tabular-nums">
+                          {pDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        </time>
+                        <span className="text-dust/40">·</span>
+                        <span>
+                          {post.city && `${post.city}, `}
+                          {postCountry?.name || post.country?.name}
+                        </span>
+                      </div>
+                      {(post.travel_mode || post.weather || post.mood) && (
+                        <PostDetailsDropdown post={post} />
                       )}
                     </div>
 
                     {/* Inline post title */}
                     {post.title && (
-                      <h2 className="font-display font-black text-2xl md:text-3xl text-ink leading-tight">
-                        {post.title}
-                      </h2>
-                    )}
-
-                    {/* Weather/Mood bar */}
-                    {(post.weather || post.mood) && (
-                      <div className="flex flex-wrap gap-4 text-xs font-body text-dust py-2 border-y border-ink/5">
-                        {post.weather && (
-                          <div className="flex items-center">
-                            <span className="overline text-[10px] text-dust/60 mr-1.5 select-none">Weather:</span>
-                            <span className="text-ink font-medium">{post.weather}</span>
-                          </div>
-                        )}
-                        {post.mood && (
-                          <div className="flex items-center">
-                            <span className="overline text-[10px] text-dust/60 mr-1.5 select-none">Mood:</span>
-                            <span className="text-ink font-medium">{post.mood}</span>
-                          </div>
-                        )}
+                      <div className="flex justify-center w-full py-1">
+                        <h2 className="font-display font-bold text-lg md:text-xl text-center">
+                          <a 
+                            href={`/post/${post.post_id}`} 
+                            className="text-ink hover:text-amber transition-colors duration-300 relative group"
+                          >
+                            {post.title}
+                            <span className="absolute left-0 right-0 bottom-0 h-[1px] bg-amber/0 group-hover:bg-amber/40 transition-colors duration-300" />
+                          </a>
+                        </h2>
                       </div>
                     )}
 
@@ -119,15 +173,14 @@ export default function TripContent({ posts, fullPosts, media }: TripContentProp
                         headingShift={true}
                       />
                     </section>
+
+                    {/* Interactive Post Footer (Map, Emojis, Impulse) */}
+                    <PostFooter postId={post.post_id} tripId={tripId} />
                   </article>
 
-                  {/* Minimalist graphical separator between posts */}
+                  {/* Graphical decorative flourish separator between posts */}
                   {index < fullPosts.length - 1 && (
-                    <div className="flex items-center justify-center my-16 select-none" aria-hidden="true">
-                      <div className="w-16 h-[1px] bg-ink/10" />
-                      <div className="w-1.5 h-1.5 rotate-45 bg-amber/75 mx-4" />
-                      <div className="w-16 h-[1px] bg-ink/10" />
-                    </div>
+                    <PostSeparator postId={post.post_id} />
                   )}
                 </div>
               );
@@ -152,18 +205,18 @@ export default function TripContent({ posts, fullPosts, media }: TripContentProp
                   {/* Post details */}
                   <div className="flex flex-col md:flex-row gap-6 items-start">
                     {/* Date/Location metadata */}
-                    <div className="w-full md:w-44 shrink-0 md:pt-1">
-                      <time className="block text-sm font-semibold text-ink font-body tabular-nums">
-                        {pDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                      </time>
-                      <span className="block text-2xs text-dust font-body mt-1">
-                        {post.city && `${post.city}, `}
-                        {postCountry?.name || post.country?.name}
-                      </span>
-                      {post.travel_mode && (
-                        <span className="inline-block mt-2 text-3xs uppercase tracking-widest bg-cream text-dust px-1.5 py-0.5 rounded-sm font-body">
-                          {post.travel_mode}
+                    <div className="w-full md:w-44 shrink-0 md:pt-1 flex flex-col items-start gap-2">
+                      <div>
+                        <time className="block text-sm font-semibold text-ink font-body tabular-nums">
+                          {pDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        </time>
+                        <span className="block text-2xs text-dust font-body mt-1">
+                          {post.city && `${post.city}, `}
+                          {postCountry?.name || post.country?.name}
                         </span>
+                      </div>
+                      {(post.travel_mode || post.weather || post.mood) && (
+                        <PostDetailsDropdown post={post} />
                       )}
                     </div>
 
@@ -220,6 +273,94 @@ export default function TripContent({ posts, fullPosts, media }: TripContentProp
           </div>
         )}
       </div>
+
+      {/* Floating Trip Navigation Helper */}
+      {showNav && (
+        <div ref={navRef} className="fixed bottom-6 right-6 z-40 font-body">
+          {countriesInTrip.length > 1 ? (
+            <div className="relative">
+              {/* Dropdown Menu (Opens Upward) */}
+              {isOpen && (
+                <div className="absolute bottom-full right-0 mb-2 w-48 bg-white/90 backdrop-blur-md border border-ink/10 rounded-lg shadow-xl z-50 animate-fade-in flex flex-col max-h-[60vh] md:max-h-[70vh]">
+                  {/* Sticky Top: Start link */}
+                  <div className="py-1 border-b border-ink/5 shrink-0 sticky top-0 rounded-t-lg z-10 bg-white/50 backdrop-blur-sm">
+                    <button
+                      onClick={scrollToTop}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-2xs uppercase tracking-wider text-left text-dust hover:text-amber hover:bg-cream/40 transition-colors rounded-t-lg"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                        <polyline points="5 12 12 5 19 12"></polyline>
+                      </svg>
+                      <span>Start</span>
+                    </button>
+                  </div>
+                  
+                  {/* Scrollable Area: Countries */}
+                  <div className="py-1 overflow-y-auto flex-1">
+                    <div className="px-3 py-1 text-[9px] uppercase tracking-widest text-dust/60 font-semibold sticky top-0 bg-white/90 backdrop-blur-sm z-10">
+                      Countries
+                    </div>
+                    <div className="divide-y divide-ink/5">
+                      {countriesInTrip.map((country) => (
+                        <button
+                          key={country.postId}
+                          onClick={() => scrollToPost(country.postId)}
+                          className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-left text-ink hover:text-amber hover:bg-cream/40 transition-colors"
+                        >
+                          <span className="truncate pr-2">{country.name}</span>
+                          {country.isoCode && (
+                            <span className="text-[10px] uppercase font-mono text-dust/60 bg-cream/30 px-1 rounded shrink-0">
+                              {country.isoCode}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Main Trigger Pill */}
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/80 hover:bg-white border border-ink/10 shadow-md hover:shadow-lg backdrop-blur-md transition-all duration-300 group text-ink"
+                aria-label="Toggle navigation menu"
+              >
+                <svg className="w-4 h-4 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="currentColor" className="opacity-20" />
+                  <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+                </svg>
+                <span className="text-2xs uppercase tracking-widest font-semibold text-ink group-hover:text-amber transition-colors">
+                  Trip
+                </span>
+                <svg
+                  className={`w-3.5 h-3.5 text-dust transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            // Simple Back-to-Top Button
+            <button
+              onClick={scrollToTop}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-white/80 hover:bg-white border border-ink/10 shadow-md hover:shadow-lg backdrop-blur-md transition-all duration-300 group text-ink"
+              aria-label="Scroll to top"
+            >
+              <svg className="w-4 h-4 text-amber group-hover:-translate-y-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="19" x2="12" y2="5"></line>
+                <polyline points="5 12 12 5 19 12"></polyline>
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
