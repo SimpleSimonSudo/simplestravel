@@ -44,7 +44,7 @@ export default async function TripEditor({ params }: { params: Promise<{ id: str
     tripCountries = tcData || [];
   }
 
-  const saveAction = saveTrip.bind(null, id);
+  const saveAction = saveTrip.bind(null, id) as any;
 
   return (
     <div className="space-y-6 animate-fade-up max-w-4xl">

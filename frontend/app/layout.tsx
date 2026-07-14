@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: {
@@ -47,7 +48,27 @@ function Footer() {
             Keep exploring — with an open heart and curious eyes.
           </p>
         </div>
-        <p className="text-dust text-xs tracking-wide font-body">Private journal. All rights reserved.</p>
+        <div className="flex flex-col items-start md:items-end gap-2">
+          <p className="text-dust text-xs tracking-wide font-body select-none">
+            Private journal. All rights reserved.
+            <Link 
+              href="/admin-login" 
+              className="opacity-0 hover:opacity-100 focus:opacity-100 text-[10px] text-amber ml-1 transition-opacity duration-300"
+              title="Control Panel"
+            >
+              ·
+            </Link>
+          </p>
+          <div className="flex items-center gap-3 text-xs font-body text-dust">
+            <Link href="/impressum" className="hover:text-amber transition-colors duration-200">
+              Legal Notice
+            </Link>
+            <span className="opacity-40">·</span>
+            <Link href="/datenschutz" className="hover:text-amber transition-colors duration-200">
+              Privacy Policy
+            </Link>
+          </div>
+        </div>
       </div>
     </footer>
   );

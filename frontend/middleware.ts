@@ -8,6 +8,8 @@ export function middleware(request: NextRequest) {
   if (
     path.startsWith("/_next") ||
     path.startsWith("/gate") ||
+    path.startsWith("/admin-login") ||
+    path.startsWith("/api/admin-login") ||
     path.startsWith("/api/verify") ||
     path.startsWith("/page_media") ||
     path === "/favicon.ico"

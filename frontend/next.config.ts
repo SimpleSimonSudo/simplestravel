@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     loader: "custom",
     loaderFile: "./lib/image-loader.ts",
   },
+  output: "standalone",
   serverExternalPackages: [],
 };
 

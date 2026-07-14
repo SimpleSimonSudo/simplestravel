@@ -76,3 +76,12 @@ Im Hauptverzeichnis befindet sich die Datei [DATABASE_BLUEPRINT.md](file:///home
 
 > [!TIP]
 > **Für Gemini-Agenten:** Wenn du einem Gemini-Agenten eine Aufgabe gibst, die die Datenbank betrifft, weise ihn darauf hin, zuerst die Datei [DATABASE_BLUEPRINT.md](file:///home/simple_simon/Codes/traveling_planet_earth/DATABASE_BLUEPRINT.md) zu lesen. Dadurch versteht er die Tabellenstruktur und Fremdschlüsselbeziehungen sofort und muss sich nicht mühsam durch SQL-Migrationsdateien hangeln.
+
+## Admin-Bereich & Blog-Management
+
+Um in das Blog-Management zu gelangen:
+1. **Versteckter Link**: Im Footer der Seite befindet sich direkt hinter dem Satz „Private journal. All rights reserved.“ ein versteckter Punkt `·`. Dieser ist standardmäßig unsichtbar und wird erst sichtbar (`opacity-100`), wenn man mit der Maus darüber fährt (Hover).
+2. Alternativ kannst du auch direkt die URL `/admin-login` aufrufen.
+3. **Zugangsdaten**:
+   - **Admin-Key**: Einer deiner in `.env.local` konfigurierten Keys (z. B. `522-944`).
+   - **Passwort**: Siehe `ADMIN_PASSWORD` in `frontend/.env.local`

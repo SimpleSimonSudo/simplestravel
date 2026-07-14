@@ -24,8 +24,7 @@ export default async function CountryEditor({ params }: { params: Promise<{ id: 
     country = data;
   }
 
-  // We bind the ID so the action knows which record to update.
-  const saveAction = saveCountry.bind(null, id);
+  const saveAction = saveCountry.bind(null, id) as any;
 
   return (
     <div className="space-y-6 animate-fade-up max-w-2xl">
