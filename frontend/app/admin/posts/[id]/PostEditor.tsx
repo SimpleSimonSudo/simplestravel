@@ -11,6 +11,46 @@ import LocationMap from "@/components/LocationMap";
 import { getPresignedUploadUrl } from "../../actions/upload";
 import { savePost } from "../actions";
 
+function normalizeLayoutRows(blocks: any[]) {
+  return blocks.map((block, idx) => {
+    if (block.type === "image" || block.type === "video") {
+      // If this block is Left
+      if (block.layout_position === 0) {
+        // Check if next block is Right
+        const nextBlock = blocks[idx + 1];
+        const isNextPartner = nextBlock && 
+          (nextBlock.type === "image" || nextBlock.type === "video") && 
+          nextBlock.layout_position === 1;
+
+        if (isNextPartner) {
+          const rowId = block.layout_row || block.id || Date.now().toString();
+          return { ...block, layout_row: rowId };
+        } else {
+          // Left block without a Right partner -> reset to full width
+          return { ...block, layout_position: undefined, layout_row: undefined };
+        }
+      }
+      // If this block is Right
+      if (block.layout_position === 1) {
+        // Check if previous block is Left
+        const prevBlock = blocks[idx - 1];
+        const isPrevPartner = prevBlock && 
+          (prevBlock.type === "image" || prevBlock.type === "video") && 
+          prevBlock.layout_position === 0;
+
+        if (isPrevPartner) {
+          const rowId = prevBlock.layout_row || prevBlock.id || Date.now().toString();
+          return { ...block, layout_row: rowId };
+        } else {
+          // Right block without a Left partner -> reset to full width
+          return { ...block, layout_position: undefined, layout_row: undefined };
+        }
+      }
+    }
+    return block;
+  });
+}
+
 export function PostEditor({
   initialPost,
   initialMedia = [],
@@ -47,7 +87,7 @@ export function PostEditor({
         ...initialPost,
         companions: initialPost.companions || [],
         tags: initialPost.tags || [],
-        content_blocks: normalizedBlocks,
+        content_blocks: normalizeLayoutRows(normalizedBlocks),
       };
     }
     if (typeof window !== "undefined") {
@@ -101,6 +141,28 @@ export function PostEditor({
 
   const handleChange = (field: string, value: any) => {
     setDraft((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  const handleBlockChange = (id: string, updates: any) => {
+    setDraft((prev: any) => {
+      const updatedBlocks = prev.content_blocks.map((b: any) => 
+        b.id === id ? { ...b, ...updates } : b
+      );
+      return {
+        ...prev,
+        content_blocks: normalizeLayoutRows(updatedBlocks),
+      };
+    });
+  };
+
+  const handleBlockRemove = (id: string) => {
+    setDraft((prev: any) => {
+      const updatedBlocks = prev.content_blocks.filter((b: any) => b.id !== id);
+      return {
+        ...prev,
+        content_blocks: normalizeLayoutRows(updatedBlocks),
+      };
+    });
   };
 
   const handleArrayChange = (field: string, commaString: string) => {
@@ -189,13 +251,14 @@ export function PostEditor({
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
-    if (active.id !== over.id) {
+    if (over && active.id !== over.id) {
       setDraft((prev: any) => {
         const oldIndex = prev.content_blocks.findIndex((b: any) => b.id === active.id);
         const newIndex = prev.content_blocks.findIndex((b: any) => b.id === over.id);
+        const reordered = arrayMove(prev.content_blocks, oldIndex, newIndex);
         return {
           ...prev,
-          content_blocks: arrayMove(prev.content_blocks, oldIndex, newIndex)
+          content_blocks: normalizeLayoutRows(reordered)
         };
       });
     }
@@ -204,6 +267,52 @@ export function PostEditor({
   const travelModes = ["foot", "bike", "car", "train", "bus", "flight", "boat", "ferry"];
   const weathers = ["sunny", "cloudy", "rainy", "stormy", "snowy", "windy", "hot", "cold"];
   const moods = ["happy", "tired", "excited", "relaxed", "adventurous", "nostalgic"];
+
+  const renderEditorBlocks = (blocks: any[]) => {
+    const rendered: React.ReactNode[] = [];
+    let i = 0;
+    while (i < blocks.length) {
+      const block = blocks[i];
+      
+      const isLeft = (block.type === "image" || block.type === "video") && block.layout_position === 0;
+      const nextBlock = blocks[i + 1];
+      const isNextRight = nextBlock && (nextBlock.type === "image" || nextBlock.type === "video") && nextBlock.layout_position === 1 && nextBlock.layout_row === block.layout_row;
+
+      if (isLeft && isNextRight) {
+        rendered.push(
+          <div key={`group-${block.id}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-dashed border-amber/30 p-2 rounded-md bg-cream/10">
+            <MediaBlock 
+              block={block} 
+              onChange={(updates) => handleBlockChange(block.id, updates)} 
+              onRemove={() => handleBlockRemove(block.id)} 
+            />
+            <MediaBlock 
+              block={nextBlock} 
+              onChange={(updates) => handleBlockChange(nextBlock.id, updates)} 
+              onRemove={() => handleBlockRemove(nextBlock.id)} 
+            />
+          </div>
+        );
+        i += 2;
+      } else {
+        const blockProps = {
+          key: block.id,
+          block,
+          onChange: (updates: any) => handleBlockChange(block.id, updates),
+          onRemove: () => handleBlockRemove(block.id),
+        };
+        if (block.type === "text") {
+          rendered.push(<TextBlock {...blockProps} />);
+        } else if (block.type === "image" || block.type === "video") {
+          rendered.push(<MediaBlock {...blockProps} />);
+        } else {
+          rendered.push(<div key={block.id}>Unknown block type</div>);
+        }
+        i++;
+      }
+    }
+    return rendered;
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -223,31 +332,7 @@ export function PostEditor({
         <div className="space-y-4">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={draft.content_blocks.map((b: any) => b.id) || []} strategy={verticalListSortingStrategy}>
-              {draft.content_blocks.map((block: any) => {
-                const blockProps = {
-                  key: block.id,
-                  block,
-                  onChange: (updates: any) => {
-                    setDraft((prev: any) => ({
-                      ...prev,
-                      content_blocks: prev.content_blocks.map((b: any) => 
-                        b.id === block.id ? { ...b, ...updates } : b
-                      )
-                    }));
-                  },
-                  onRemove: () => {
-                    setDraft((prev: any) => ({
-                      ...prev,
-                      content_blocks: prev.content_blocks.filter((b: any) => b.id !== block.id)
-                    }));
-                  }
-                };
-                
-                if (block.type === "text") return <TextBlock {...blockProps} />;
-                if (block.type === "image") return <MediaBlock {...blockProps} />;
-                
-                return <div key={block.id}>Unknown block type</div>;
-              })}
+              {renderEditorBlocks(draft.content_blocks)}
             </SortableContext>
           </DndContext>
 

@@ -93,14 +93,17 @@ export function MediaBlock({
             placeholder="Caption (optional)"
             className="flex-1 text-sm bg-cream text-ink rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-amber"
           />
-          {/* Side-by-side formatting toggle mock */}
           <select 
-            value={block.layout_position !== undefined ? block.layout_position : "full"}
+            value={block.layout_position === 0 ? "left" : block.layout_position === 1 ? "right" : "full"}
             onChange={(e) => {
               const val = e.target.value;
-              if (val === "full") onChange({ layout_position: undefined, layout_row: undefined });
-              if (val === "left") onChange({ layout_position: 0, layout_row: Date.now() }); // crude way to group
-              if (val === "right") onChange({ layout_position: 1, layout_row: Date.now() });
+              if (val === "full") {
+                onChange({ layout_position: undefined, layout_row: undefined });
+              } else if (val === "left") {
+                onChange({ layout_position: 0 });
+              } else if (val === "right") {
+                onChange({ layout_position: 1 });
+              }
             }}
             className="text-xs bg-cream text-dust rounded px-2 py-1.5 outline-none focus:text-ink"
           >

@@ -91,8 +91,8 @@ export default function ContentBlocksRenderer({
 
 // Textblock Renderer with optional heading shift
 function renderTextBlock(block: any, index: number, headingShift: boolean) {
-  const content = block.text || "";
-  const subtype = block.subtype;
+  const content = block.text || block.text_content || "";
+  const subtype = block.subtype || block.text_subtype;
 
   if (subtype === "heading1") {
     return headingShift ? (
