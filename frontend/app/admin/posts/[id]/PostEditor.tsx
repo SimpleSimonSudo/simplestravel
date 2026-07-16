@@ -26,8 +26,8 @@ function normalizeLayoutRows(blocks: any[]) {
           const rowId = block.layout_row || block.id || Date.now().toString();
           return { ...block, layout_row: rowId };
         } else {
-          // Left block without a Right partner -> reset to full width
-          return { ...block, layout_position: undefined, layout_row: undefined };
+          // Left block without a Right partner -> clear layout_row but keep layout_position
+          return { ...block, layout_row: undefined };
         }
       }
       // If this block is Right
@@ -42,8 +42,8 @@ function normalizeLayoutRows(blocks: any[]) {
           const rowId = prevBlock.layout_row || prevBlock.id || Date.now().toString();
           return { ...block, layout_row: rowId };
         } else {
-          // Right block without a Left partner -> reset to full width
-          return { ...block, layout_position: undefined, layout_row: undefined };
+          // Right block without a Left partner -> clear layout_row but keep layout_position
+          return { ...block, layout_row: undefined };
         }
       }
     }

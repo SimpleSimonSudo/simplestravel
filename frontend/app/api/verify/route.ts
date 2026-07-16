@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     // visitor profiles to dodge the per-visitor limits) and the recovery-code
     // "restore" flow (which skips Turnstile entirely and would otherwise be
     // brute-forceable — community recovery codes are only 3-digit-3-digit).
-    const withinLimit = await checkIpRateLimit("VERIFY_RATE_LIMITER", request);
+    const withinLimit = await checkIpRateLimit({ prefix: "verify", limit: 8, windowSeconds: 60 }, request);
     if (!withinLimit) {
       return NextResponse.json(
         { success: false, message: "Too many attempts. Please wait a moment and try again." },

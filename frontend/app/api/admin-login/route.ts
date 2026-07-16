@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
   try {
     // IP-based rate limit: defense-in-depth against scripted admin-password
     // guessing, independent of whether the guessed password/key is correct.
-    const withinLimit = await checkIpRateLimit("ADMIN_LOGIN_RATE_LIMITER", request);
+    const withinLimit = await checkIpRateLimit({ prefix: "admin-login", limit: 5, windowSeconds: 60 }, request);
     if (!withinLimit) {
       return NextResponse.json(
         { success: false, message: "Too many attempts. Please wait a moment and try again." },
