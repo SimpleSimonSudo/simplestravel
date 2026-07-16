@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { deleteObjectFromR2 } from "@/app/admin/actions/upload";
 
 const PostSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -74,18 +75,36 @@ export async function savePost(postId: string | "new", formData: any) {
   }
 
   // Now handle relational `content_blocks` and `media` tables
-  // First clear existing blocks for this post
-  await supabase.from("content_blocks").delete().eq("post_id", currentPostId);
-  // Do NOT blindly delete media, as it deletes files. We only delete media if it was removed. 
-  // Actually, media management is tricky. For now, we will upsert blocks.
+  // 1. Fetch current media records for this post to check for removed files
+  const { data: existingMedia } = await supabase
+    .from("media")
+    .select("media_id, storage_path")
+    .eq("post_id", currentPostId);
 
+  // 2. Identify new storage paths from incoming blocks
+  const newStoragePaths = new Set<string>(
+    data.content_blocks
+      .filter((block: any) => (block.type === "image" || block.type === "video") && block.storage_path)
+      .map((block: any) => block.storage_path)
+  );
+
+  // 3. Find media records that are being removed from this post
+  const removedMedia = (existingMedia || []).filter(
+    (m: any) => m.storage_path && !newStoragePaths.has(m.storage_path)
+  );
+
+  // 4. Clear existing content blocks and media records for this post
+  await supabase.from("content_blocks").delete().eq("post_id", currentPostId);
+  await supabase.from("media").delete().eq("post_id", currentPostId);
+
+  // 5. Insert new media and content blocks
   for (let i = 0; i < data.content_blocks.length; i++) {
     const block = data.content_blocks[i];
     
     let mediaId = null;
 
     if (block.type === "image" || block.type === "video") {
-      // Upsert Media record
+      // Insert Media record
       const mediaPayload = {
         post_id: currentPostId,
         block_index: i,
@@ -118,6 +137,35 @@ export async function savePost(postId: string | "new", formData: any) {
     };
 
     await supabase.from("content_blocks").insert(blockPayload);
+  }
+
+  // 6. Clean up deleted media from R2 bucket asynchronously/post-DB-update
+  // If the same file is still referenced in other posts, we keep the R2 object.
+  const publicUrl = process.env.R2_PUBLIC_URL || "https://pub-b3a0e6a319434721bf2acd7052d64b6e.r2.dev";
+  for (const media of removedMedia) {
+    try {
+      // Check if another post references this file
+      const { count } = await supabase
+        .from("media")
+        .select("media_id", { count: "exact", head: true })
+        .eq("storage_path", media.storage_path);
+
+      if (count === 0) {
+        // Safe to delete from R2 as no other database record references it
+        let key = media.storage_path;
+        if (key.includes(publicUrl)) {
+          key = key.substring(key.indexOf(publicUrl) + publicUrl.length).replace(/^\/+/, "");
+        } else if (key.includes(".r2.dev/")) {
+          key = key.substring(key.indexOf(".r2.dev/") + 8);
+        }
+        key = decodeURIComponent(key);
+
+        console.log(`Deleting orphaned file from R2: ${key}`);
+        await deleteObjectFromR2(key);
+      }
+    } catch (e) {
+      console.error(`Failed to clean up R2 object for ${media.storage_path}:`, e);
+    }
   }
 
   revalidatePath("/admin/posts");

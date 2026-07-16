@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { createSessionToken, requireSessionSecret, sessionCookieOptions } from "@/lib/session";
+import { checkIpRateLimit } from "@/lib/rateLimit";
 
 export async function POST(request: NextRequest) {
   try {
+    // IP-based rate limit: defense-in-depth against scripted admin-password
+    // guessing, independent of whether the guessed password/key is correct.
+    const withinLimit = await checkIpRateLimit("ADMIN_LOGIN_RATE_LIMITER", request);
+    if (!withinLimit) {
+      return NextResponse.json(
+        { success: false, message: "Too many attempts. Please wait a moment and try again." },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { adminKey, password } = body;
 

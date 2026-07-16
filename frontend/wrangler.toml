@@ -2,3 +2,24 @@ name = "simplestravel"
 compatibility_date = "2026-07-16"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".open-next"
+
+# IP-based rate limiting (Cloudflare Workers Rate Limiting binding) for the
+# two unauthenticated endpoints that create sessions: the gate quiz/recovery
+# flow and the admin login. Defense-in-depth on top of Turnstile and the
+# per-visitor rate limits already enforced in application code — see
+# lib/rateLimit.ts for how these are used.
+[[ratelimits]]
+name = "VERIFY_RATE_LIMITER"
+namespace_id = "1001"
+
+[ratelimits.simple]
+limit = 8
+period = 60
+
+[[ratelimits]]
+name = "ADMIN_LOGIN_RATE_LIMITER"
+namespace_id = "1002"
+
+[ratelimits.simple]
+limit = 5
+period = 60

@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
 import { createSessionToken, requireSessionSecret, sessionCookieOptions } from "@/lib/session";
+import { checkIpRateLimit } from "@/lib/rateLimit";
 
 export async function POST(request: NextRequest) {
   try {
+    // IP-based rate limit covers both the quiz flow (bots spinning up unlimited
+    // visitor profiles to dodge the per-visitor limits) and the recovery-code
+    // "restore" flow (which skips Turnstile entirely and would otherwise be
+    // brute-forceable — community recovery codes are only 3-digit-3-digit).
+    const withinLimit = await checkIpRateLimit("VERIFY_RATE_LIMITER", request);
+    if (!withinLimit) {
+      return NextResponse.json(
+        { success: false, message: "Too many attempts. Please wait a moment and try again." },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { flow, answers, turnstileToken } = body;
 
