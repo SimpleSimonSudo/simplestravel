@@ -8,7 +8,7 @@ export default function Footer() {
   const pathname = usePathname();
 
   // Hide footer on admin pages
-  if (pathname?.startsWith("/admin")) {
+  if (pathname === "/admin" || pathname?.startsWith("/admin/")) {
     return null;
   }
 

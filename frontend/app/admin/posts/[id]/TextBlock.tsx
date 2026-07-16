@@ -45,8 +45,8 @@ export function TextBlock({
 
       <div className="flex-1 space-y-2">
         <textarea
-          value={block.text_content || ""}
-          onChange={(e) => onChange({ text_content: e.target.value })}
+          value={block.text || ""}
+          onChange={(e) => onChange({ text: e.target.value })}
           placeholder="Write your thoughts here..."
           className="w-full min-h-[100px] resize-y p-2 outline-none border-none text-ink font-body placeholder:text-dust/50 bg-transparent"
         />
@@ -54,8 +54,8 @@ export function TextBlock({
         {/* Simple formatting toggle just to show the data structure */}
         <div className="flex gap-2">
           <select 
-            value={block.text_subtype || "paragraph"}
-            onChange={(e) => onChange({ text_subtype: e.target.value })}
+            value={block.subtype || "paragraph"}
+            onChange={(e) => onChange({ subtype: e.target.value })}
             className="text-xs bg-cream text-dust rounded px-2 py-1 outline-none focus:text-ink"
           >
             <option value="paragraph">Paragraph</option>

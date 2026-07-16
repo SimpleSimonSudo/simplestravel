@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,10 +25,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const visitorId = request.cookies.get("visitor_profile")?.value;
-    if (!visitorId) {
+    const session = await getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ success: false, message: "Please verify your profile before creating a board." }, { status: 401 });
     }
+    const visitorId = session.vid;
 
     const body = await request.json();
     const { name, description } = body;

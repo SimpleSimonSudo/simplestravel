@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase";
+import AdminPostRow from "./AdminPostRow";
 
 export const dynamic = "force-dynamic";
 
@@ -67,12 +68,11 @@ export default async function AdminPostsList({
               <th className="py-3 px-4 font-medium border-b border-ink/10">Title</th>
               <th className="py-3 px-4 font-medium border-b border-ink/10 hidden md:table-cell">Location</th>
               <th className="py-3 px-4 font-medium border-b border-ink/10 hidden lg:table-cell">Trip</th>
-              <th className="py-3 px-4 font-medium border-b border-ink/10 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink/10">
             {posts?.map((post: any) => (
-              <tr key={post.post_id} className="hover:bg-cream/10 transition-colors">
+              <AdminPostRow key={post.post_id} postId={post.post_id}>
                 <td className="py-3 px-4 text-dust text-sm whitespace-nowrap">
                   {new Date(post.actual_date).toLocaleDateString()}
                 </td>
@@ -85,20 +85,11 @@ export default async function AdminPostsList({
                 <td className="py-3 px-4 text-dust hidden lg:table-cell">
                   {post.trip_name || "-"}
                 </td>
-                <td className="py-3 px-4 text-right">
-                  <Link
-                    href={`/admin/posts/${post.post_id}`}
-                    className="inline-flex items-center gap-1 text-sm text-amber hover:text-ink transition-colors"
-                  >
-                    <Edit size={14} />
-                    Edit
-                  </Link>
-                </td>
-              </tr>
+              </AdminPostRow>
             ))}
             {(!posts || posts.length === 0) && (
               <tr>
-                <td colSpan={5} className="py-6 px-4 text-center text-dust">
+                <td colSpan={4} className="py-6 px-4 text-center text-dust">
                   No posts found.
                 </td>
               </tr>

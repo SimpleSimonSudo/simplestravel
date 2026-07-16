@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
+import { createSessionToken, requireSessionSecret, sessionCookieOptions } from "@/lib/session";
 
 export async function POST(request: NextRequest) {
   try {
@@ -261,8 +262,17 @@ export async function POST(request: NextRequest) {
       avatarId = newVisitor.avatar_id;
     }
 
-    // 3. Cookies setzen (Gültigkeit: 10 Jahre)
-    const sessionSecret = process.env.SESSION_SECRET || "default_session_secret_key_123";
+    // 3. Signiertes Session-Token ausstellen. Ein Cookie für Identität + Admin-Claim,
+    //    statt drei separaten (teils unsignierten) Cookies wie zuvor.
+    const sessionSecret = requireSessionSecret();
+
+    const adminKeysStr = process.env.ADMIN_KEYS || "";
+    const adminKeys = adminKeysStr.split(",").map(k => k.trim()).filter(Boolean);
+    const cleanRecoveryCodeLower = recoveryCode.replace(/[^0-9a-zA-Z]/g, "").toLowerCase();
+    const isAdmin = adminKeys.some(k => k.replace(/[^0-9a-zA-Z]/g, "").toLowerCase() === cleanRecoveryCodeLower);
+
+    const token = await createSessionToken({ vid: visitorId, adm: isAdmin }, sessionSecret);
+
     const response = NextResponse.json({
       success: true,
       nickname: displayName,
@@ -272,44 +282,7 @@ export async function POST(request: NextRequest) {
     });
 
     const isSecure = process.env.NODE_ENV === "production";
-
-    // travel_session Cookie (für Middleware)
-    response.cookies.set("travel_session", sessionSecret, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365 * 10,
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: "strict",
-    });
-
-    // visitor_profile Cookie (für API-Verifikation)
-    response.cookies.set("visitor_profile", visitorId, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365 * 10,
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: "strict",
-    });
-
-    // admin_session Cookie falls Admin
-    const adminKeysStr = process.env.ADMIN_KEYS || "";
-    const adminKeys = adminKeysStr.split(",").map(k => k.trim()).filter(Boolean);
-    const cleanRecoveryCodeLower = recoveryCode.replace(/[^0-9a-zA-Z]/g, "").toLowerCase();
-    const isAdmin = adminKeys.some(k => k.replace(/[^0-9a-zA-Z]/g, "").toLowerCase() === cleanRecoveryCodeLower);
-
-    if (isAdmin) {
-      const expectedAdminSecret = process.env.ADMIN_SESSION_SECRET || (sessionSecret + "_admin_secret");
-      response.cookies.set("admin_session", expectedAdminSecret, {
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365 * 10,
-        httpOnly: true,
-        secure: isSecure,
-        sameSite: "strict",
-      });
-    } else {
-      // Clear admin session if a normal user logs in
-      response.cookies.delete("admin_session");
-    }
+    response.cookies.set("travel_session", token, sessionCookieOptions(isSecure));
 
     return response;
   } catch (error) {

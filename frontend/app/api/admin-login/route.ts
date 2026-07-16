@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
+import { createSessionToken, requireSessionSecret, sessionCookieOptions } from "@/lib/session";
 
 export async function POST(request: NextRequest) {
   try {
@@ -99,10 +100,12 @@ export async function POST(request: NextRequest) {
         .eq("visitor_id", visitor.visitor_id);
     }
 
-    // 4. Session Cookies Setup (10 Years validity)
-    const sessionSecret = process.env.SESSION_SECRET || "default_session_secret_key_123";
-    const expectedAdminSecret = process.env.ADMIN_SESSION_SECRET || (sessionSecret + "_admin_secret");
-    
+    // 4. Signiertes Session-Token ausstellen (ersetzt geteiltes Secret-Cookie).
+    //    Der Admin-Claim steckt im Token selbst und lässt sich ohne SESSION_SECRET
+    //    nicht fälschen — ein einziges Cookie statt drei separaten reicht damit aus.
+    const sessionSecret = requireSessionSecret();
+    const token = await createSessionToken({ vid: visitor.visitor_id, adm: true }, sessionSecret);
+
     const response = NextResponse.json({
       success: true,
       nickname: visitor.display_name,
@@ -112,33 +115,7 @@ export async function POST(request: NextRequest) {
     });
 
     const isSecure = process.env.NODE_ENV === "production";
-
-    // Set general session cookie
-    response.cookies.set("travel_session", sessionSecret, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365 * 10,
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: "strict",
-    });
-
-    // Set visitor profile ID cookie
-    response.cookies.set("visitor_profile", visitor.visitor_id, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365 * 10,
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: "strict",
-    });
-
-    // Set admin session cookie
-    response.cookies.set("admin_session", expectedAdminSecret, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365 * 10,
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: "strict",
-    });
+    response.cookies.set("travel_session", token, sessionCookieOptions(isSecure));
 
     return response;
   } catch (error) {

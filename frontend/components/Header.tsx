@@ -12,6 +12,11 @@ export default function Header() {
   const pathname = usePathname();
   const isMapPage = pathname === "/map";
 
+  // Hide the header completely in the admin panel (but not on admin-login)
+  if (pathname === "/admin" || pathname?.startsWith("/admin/")) {
+    return null;
+  }
+
   useEffect(() => {
     async function fetchTrips() {
       try {

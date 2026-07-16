@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/session";
 
 function getFirstImageUrl(mediaList: any[] | null): string | null {
   if (!mediaList || mediaList.length === 0) return null;
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
     const postId = searchParams.get("post_id");
 
     const adminClient = createAdminClient();
-    const currentVisitorId = request.cookies.get("visitor_profile")?.value;
+    const currentVisitorId = (await getVerifiedSession(request))?.vid;
 
     // Fetch impulses with relations
     let query = adminClient
@@ -130,10 +131,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const visitorId = request.cookies.get("visitor_profile")?.value;
-    if (!visitorId) {
+    const session = await getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ success: false, message: "Please verify your profile before posting." }, { status: 401 });
     }
+    const visitorId = session.vid;
 
     const body = await request.json();
     const { content, post_id, country_id, board_id } = body;
@@ -335,10 +337,11 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const visitorId = request.cookies.get("visitor_profile")?.value;
-    if (!visitorId) {
+    const session = await getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ success: false, message: "Please verify your profile first." }, { status: 401 });
     }
+    const visitorId = session.vid;
 
     const body = await request.json();
     const { impulse_id, content } = body;
@@ -394,10 +397,11 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const visitorId = request.cookies.get("visitor_profile")?.value;
-    if (!visitorId) {
+    const session = await getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ success: false, message: "Please verify your profile first." }, { status: 401 });
     }
+    const visitorId = session.vid;
 
     const { searchParams } = new URL(request.url);
     const impulseId = searchParams.get("impulse_id");

@@ -1,38 +1,47 @@
+"use client";
+
 import Link from "next/link";
-import { LayoutDashboard, PenSquare, Map, Globe, LogOut } from "lucide-react";
-import React from "react";
+import { LayoutDashboard, PenSquare, Map, Globe, LogOut, Menu, X } from "lucide-react";
+import React, { useState } from "react";
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  const closeMenu = () => setIsMobileOpen(false);
+
   return (
     <div className="min-h-screen bg-paper flex flex-col md:flex-row">
       {/* Mobile Header / Desktop Sidebar */}
       <aside className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-ink/10 flex flex-col md:fixed md:h-full z-10">
         <div className="p-6 flex items-center justify-between md:justify-center border-b border-ink/10">
-          <Link href="/admin" className="font-display italic text-amber text-xl tracking-wide">
+          <Link href="/admin" onClick={closeMenu} className="font-display italic text-amber text-xl tracking-wide">
             Diary Admin
           </Link>
-          {/* Mobile Menu Button - simple version for now */}
-          <div className="md:hidden">
-            <div className="w-6 h-0.5 bg-ink mb-1"></div>
-            <div className="w-6 h-0.5 bg-ink mb-1"></div>
-            <div className="w-6 h-0.5 bg-ink"></div>
-          </div>
+          {/* Mobile Menu Toggle Button */}
+          <button
+            onClick={() => setIsMobileOpen(!isMobileOpen)}
+            className="md:hidden p-2 text-ink hover:text-amber transition-colors focus:outline-none"
+            aria-label="Toggle navigation menu"
+          >
+            {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
 
-        <nav className="hidden md:flex flex-col p-4 gap-2 flex-1">
-          <NavItem href="/admin" icon={<LayoutDashboard size={18} />} label="Dashboard" />
-          <NavItem href="/admin/posts" icon={<PenSquare size={18} />} label="Posts" />
-          <NavItem href="/admin/trips" icon={<Map size={18} />} label="Trips" />
-          <NavItem href="/admin/countries" icon={<Globe size={18} />} label="Countries" />
+        <nav className={`${isMobileOpen ? "flex" : "hidden"} md:flex flex-col p-4 gap-2 flex-1`}>
+          <NavItem href="/admin" icon={<LayoutDashboard size={18} />} label="Dashboard" onClick={closeMenu} />
+          <NavItem href="/admin/posts" icon={<PenSquare size={18} />} label="Posts" onClick={closeMenu} />
+          <NavItem href="/admin/trips" icon={<Map size={18} />} label="Trips" onClick={closeMenu} />
+          <NavItem href="/admin/countries" icon={<Globe size={18} />} label="Countries" onClick={closeMenu} />
         </nav>
 
-        <div className="hidden md:block p-4 border-t border-ink/10">
+        <div className={`${isMobileOpen ? "block" : "hidden"} md:block p-4 border-t border-ink/10`}>
           <Link
             href="/"
+            onClick={closeMenu}
             className="flex items-center gap-3 px-4 py-2 text-sm text-dust hover:text-ink transition-colors rounded-md hover:bg-cream"
           >
             <LogOut size={18} />
@@ -49,10 +58,21 @@ export default function AdminLayout({
   );
 }
 
-function NavItem({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+function NavItem({
+  href,
+  icon,
+  label,
+  onClick,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+}) {
   return (
     <Link
       href={href}
+      onClick={onClick}
       className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-dust hover:text-ink hover:bg-cream/50 rounded-md transition-colors"
     >
       {icon}

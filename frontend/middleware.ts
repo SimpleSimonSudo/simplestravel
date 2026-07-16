@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { createSessionToken, sessionCookieOptions, SESSION_TTL_MS, verifySessionToken } from "@/lib/session";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // 1. Erlaube Zugriffe auf statische Dateien, die Gate-Seite und den API-Verifikations-Endpunkt
@@ -17,21 +18,26 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Lese das Session-Cookie aus
-  const sessionToken = request.cookies.get("travel_session")?.value;
-  const expectedSecret = process.env.SESSION_SECRET || "default_session_secret_key_123";
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) {
+    // Fail closed: never fall back to a hardcoded default that ships with the source.
+    return new NextResponse("Server misconfigured.", { status: 500 });
+  }
 
-  // 3. Umleitung zur Gate-Seite, falls Cookie fehlt oder ungültig ist
-  if (!sessionToken || sessionToken !== expectedSecret) {
+  // 2. Signiertes Session-Cookie verifizieren (kein geteiltes Geheimnis mehr im Cookie selbst)
+  const token = request.cookies.get("travel_session")?.value;
+  const session = await verifySessionToken(token, sessionSecret);
+
+  // 3. Umleitung zur Gate-Seite, falls Cookie fehlt, abgelaufen oder ungültig ist
+  if (!session) {
     const gateUrl = new URL("/gate", request.url);
     return NextResponse.redirect(gateUrl);
   }
 
-  // 4. Admin-Pfad-Schutz für /admin und /api/admin
+  // 4. Admin-Pfad-Schutz für /admin und /api/admin — Claim steckt im signierten Token,
+  //    kann also nicht durch simples Cookie-Editieren erschlichen werden.
   if (path.startsWith("/admin") || path.startsWith("/api/admin")) {
-    const adminToken = request.cookies.get("admin_session")?.value;
-    const expectedAdminSecret = process.env.ADMIN_SESSION_SECRET || (expectedSecret + "_admin_secret");
-    if (!adminToken || adminToken !== expectedAdminSecret) {
+    if (!session.adm) {
       if (path.startsWith("/api/")) {
         return new NextResponse(
           JSON.stringify({ success: false, error: "Unauthorized admin access." }),
@@ -43,7 +49,19 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+
+  // 5. Sliding expiration: Aktive Besucher bekommen ihr Token verlängert, solange sie
+  //    wiederkommen, damit sie nie wieder durchs Gate müssen. Inaktive/geleakte Tokens
+  //    laufen dagegen nach spätestens ~400 Tagen ohne Besuch von selbst aus.
+  const remaining = session.exp - Date.now();
+  if (remaining < SESSION_TTL_MS / 2) {
+    const refreshed = await createSessionToken({ vid: session.vid, adm: session.adm }, sessionSecret);
+    const isSecure = process.env.NODE_ENV === "production";
+    response.cookies.set("travel_session", refreshed, sessionCookieOptions(isSecure));
+  }
+
+  return response;
 }
 
 // Konfiguration: Für alle Pfade ausführen, außer für statische Next-Ressourcen

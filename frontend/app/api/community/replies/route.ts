@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,10 +55,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const visitorId = request.cookies.get("visitor_profile")?.value;
-    if (!visitorId) {
+    const session = await getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ success: false, message: "Please verify your profile before replying." }, { status: 401 });
     }
+    const visitorId = session.vid;
 
     const body = await request.json();
     const { content, impulse_id } = body;
@@ -146,10 +148,11 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const visitorId = request.cookies.get("visitor_profile")?.value;
-    if (!visitorId) {
+    const session = await getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ success: false, message: "Please verify your profile first." }, { status: 401 });
     }
+    const visitorId = session.vid;
 
     const body = await request.json();
     const { reply_id, content } = body;
@@ -205,10 +208,11 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const visitorId = request.cookies.get("visitor_profile")?.value;
-    if (!visitorId) {
+    const session = await getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ success: false, message: "Please verify your profile first." }, { status: 401 });
     }
+    const visitorId = session.vid;
 
     const { searchParams } = new URL(request.url);
     const replyId = searchParams.get("reply_id");

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/session";
 
 const VALID_REACTIONS = [
   "heart", "sparkles", "globe", "funny", "applause", "rocket", "camera",
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, message: "Missing post_id." }, { status: 400 });
     }
 
-    const currentVisitorId = request.cookies.get("visitor_profile")?.value;
+    const currentVisitorId = (await getVerifiedSession(request))?.vid;
     const adminClient = createAdminClient();
 
     const { data: post, error: fetchErr } = await adminClient
@@ -79,10 +80,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const visitorId = request.cookies.get("visitor_profile")?.value;
-    if (!visitorId) {
+    const session = await getVerifiedSession(request);
+    if (!session) {
       return NextResponse.json({ success: false, message: "Please verify your profile before reacting." }, { status: 401 });
     }
+    const visitorId = session.vid;
 
     const body = await request.json();
     const { post_id, reaction_type } = body;

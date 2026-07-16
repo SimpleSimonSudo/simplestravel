@@ -11,21 +11,67 @@ import LocationMap from "@/components/LocationMap";
 import { getPresignedUploadUrl } from "../../actions/upload";
 import { savePost } from "../actions";
 
-export function PostEditor({ initialPost, countries, trips }: { initialPost: any, countries: any[], trips: any[] }) {
+export function PostEditor({
+  initialPost,
+  initialMedia = [],
+  countries,
+  trips,
+}: {
+  initialPost: any;
+  initialMedia?: any[];
+  countries: any[];
+  trips: any[];
+}) {
   const [isSaving, setIsSaving] = useState(false);
   const [draft, setDraft] = useState(() => {
     if (initialPost) {
-      // Ensure arrays exist
+      const normalizedBlocks = (initialPost.content_blocks || []).map((block: any, index: number) => {
+        if (block.type === "text") {
+          return {
+            ...block,
+            text: block.text || block.text_content || "",
+            subtype: block.subtype || block.text_subtype || "paragraph",
+          };
+        }
+        if (block.type === "image") {
+          const matchingMedia = (initialMedia || []).find((m: any) => m.block_index === index);
+          return {
+            ...block,
+            storage_path: block.storage_path || matchingMedia?.storage_path || matchingMedia?.original_url || null,
+            caption: block.caption || matchingMedia?.caption || "",
+          };
+        }
+        return block;
+      });
       return {
         ...initialPost,
         companions: initialPost.companions || [],
         tags: initialPost.tags || [],
-        content_blocks: initialPost.content_blocks || []
+        content_blocks: normalizedBlocks,
       };
     }
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("travel_diary_draft");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.content_blocks) {
+            parsed.content_blocks = parsed.content_blocks.map((block: any) => {
+              if (block.type === "text") {
+                return {
+                  ...block,
+                  text: block.text || block.text_content || "",
+                  subtype: block.subtype || block.text_subtype || "paragraph",
+                };
+              }
+              return block;
+            });
+          }
+          return parsed;
+        } catch (e) {
+          console.error("Failed to parse draft from localStorage:", e);
+        }
+      }
     }
     const today = new Date().toISOString().split('T')[0];
     return {
@@ -107,7 +153,7 @@ export function PostEditor({ initialPost, countries, trips }: { initialPost: any
           }
 
           // Update block with storage path and clean up file object before saving to DB
-          block.storage_path = urlRes.key;
+          block.storage_path = `https://pub-b3a0e6a319434721bf2acd7052d64b6e.r2.dev/${urlRes.key}`;
           delete block.file;
           delete block.url;
         }
@@ -213,7 +259,7 @@ export function PostEditor({ initialPost, countries, trips }: { initialPost: any
 
           <div className="flex items-center gap-2 justify-center py-4">
             <button
-              onClick={() => handleChange("content_blocks", [...draft.content_blocks, { id: Date.now().toString(), type: "text", text_content: "" }])}
+              onClick={() => handleChange("content_blocks", [...draft.content_blocks, { id: Date.now().toString(), type: "text", text: "" }])}
               className="flex items-center gap-2 px-4 py-2 bg-cream text-ink rounded hover:bg-cream/80 transition-colors"
             >
               <Type size={16} /> Add Text

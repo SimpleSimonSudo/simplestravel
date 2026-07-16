@@ -5,6 +5,21 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Trash2, Image as ImageIcon } from "lucide-react";
 import { useState } from "react";
 
+function getMediaUrl(block: any) {
+  if (!block) return null;
+  if (block.url) return block.url;
+  if (block.storage_path) {
+    if (block.storage_path.startsWith("http://") || block.storage_path.startsWith("https://")) {
+      return block.storage_path;
+    }
+    if (block.storage_path.startsWith("posts/")) {
+      return `https://sgavinsdlmhiqleczbcx.supabase.co/storage/v1/object/public/media/${block.storage_path}`;
+    }
+    return `https://pub-b3a0e6a319434721bf2acd7052d64b6e.r2.dev/${block.storage_path}`;
+  }
+  return null;
+}
+
 export function MediaBlock({ 
   block, 
   onChange, 
@@ -30,7 +45,7 @@ export function MediaBlock({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const [preview, setPreview] = useState<string | null>(block.url || null);
+  const [preview, setPreview] = useState<string | null>(getMediaUrl(block));
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

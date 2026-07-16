@@ -12,18 +12,28 @@ export default async function AdminPostPage({ params }: { params: Promise<{ id: 
   const supabase = createAdminClient();
   
   let post: any = null;
+  let media: any[] = [];
   
   if (!isNew) {
-    const { data, error } = await supabase
-      .from("posts")
-      .select("*")
-      .eq("post_id", id)
-      .single();
+    const [postRes, mediaRes] = await Promise.all([
+      supabase
+        .from("posts")
+        .select("*")
+        .eq("post_id", id)
+        .single(),
+      supabase
+        .from("media")
+        .select("*")
+        .eq("post_id", id)
+        .order("block_index")
+        .order("display_order")
+    ]);
       
-    if (error) {
-      return <div className="p-6 text-red-500">Error loading post: {error.message}</div>;
+    if (postRes.error) {
+      return <div className="p-6 text-red-500">Error loading post: {postRes.error.message}</div>;
     }
-    post = data;
+    post = postRes.data;
+    media = mediaRes.data || [];
   }
 
   // Pre-fetch reference data for dropdowns
@@ -51,6 +61,7 @@ export default async function AdminPostPage({ params }: { params: Promise<{ id: 
       {/* The interactive editor client component */}
       <PostEditor 
         initialPost={post} 
+        initialMedia={media}
         countries={countries || []} 
         trips={trips || []} 
       />
