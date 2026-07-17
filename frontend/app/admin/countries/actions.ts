@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { getAdminSessionOrNull } from "@/lib/session";
 
 const CountrySchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -13,8 +14,11 @@ const CountrySchema = z.object({
 });
 
 export async function saveCountry(countryId: string | "new", formData: FormData) {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { error: "Unauthorized." };
+
   const supabase = createAdminClient();
-  
+
   const rawData = {
     name: formData.get("name") as string,
     iso_code: formData.get("iso_code") as string,

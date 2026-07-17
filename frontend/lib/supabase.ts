@@ -25,7 +25,7 @@ export function createAdminClient() {
   if (!serviceKey) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY is not defined in environment variables");
   }
-  return createClient<any>(supabaseUrl, serviceKey, {
+  return createClient<Database>(supabaseUrl, serviceKey, {
     auth: { persistSession: false },
   });
 }

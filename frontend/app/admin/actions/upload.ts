@@ -3,6 +3,7 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getAdminSessionOrNull } from "@/lib/session";
 
 const S3 = new S3Client({
   region: "auto",
@@ -44,6 +45,9 @@ function sanitizeFilename(rawName: string): string {
 
 export async function getPresignedUploadUrl(filename: string, contentType: string) {
   try {
+    const session = await getAdminSessionOrNull();
+    if (!session) return { success: false, error: "Unauthorized." };
+
     if (!ALLOWED_CONTENT_TYPE.test(contentType || "")) {
       return { success: false, error: `Unsupported content type: ${contentType}` };
     }
@@ -75,6 +79,9 @@ export async function getPresignedUploadUrl(filename: string, contentType: strin
 
 export async function deleteObjectFromR2(key: string) {
   try {
+    const session = await getAdminSessionOrNull();
+    if (!session) return { success: false, error: "Unauthorized." };
+
     const command = new DeleteObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME,
       Key: key,

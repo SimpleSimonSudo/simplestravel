@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase";
+import { AdminClickableRow } from "@/components/AdminClickableRow";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +43,11 @@ export default async function AdminTripsList() {
               <th className="py-3 px-4 font-medium border-b border-ink/10">Name</th>
               <th className="py-3 px-4 font-medium border-b border-ink/10 hidden sm:table-cell">Dates</th>
               <th className="py-3 px-4 font-medium border-b border-ink/10 hidden md:table-cell">Distance</th>
-              <th className="py-3 px-4 font-medium border-b border-ink/10 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink/10">
             {trips?.map((trip: any) => (
-              <tr key={trip.trip_id} className="hover:bg-cream/10 transition-colors">
+              <AdminClickableRow key={trip.trip_id} href={`/admin/trips/${trip.trip_id}`}>
                 <td className="py-3 px-4 font-medium text-ink">{trip.trip_name}</td>
                 <td className="py-3 px-4 text-dust hidden sm:table-cell">
                   {trip.start_date || "?"} - {trip.end_date || "?"}
@@ -55,20 +55,11 @@ export default async function AdminTripsList() {
                 <td className="py-3 px-4 text-dust hidden md:table-cell">
                   {trip.total_distance_km ? `${trip.total_distance_km} km` : "-"}
                 </td>
-                <td className="py-3 px-4 text-right">
-                  <Link
-                    href={`/admin/trips/${trip.trip_id}`}
-                    className="inline-flex items-center gap-1 text-sm text-amber hover:text-ink transition-colors"
-                  >
-                    <Edit size={14} />
-                    Edit
-                  </Link>
-                </td>
-              </tr>
+              </AdminClickableRow>
             ))}
             {(!trips || trips.length === 0) && (
               <tr>
-                <td colSpan={4} className="py-6 px-4 text-center text-dust">
+                <td colSpan={3} className="py-6 px-4 text-center text-dust">
                   No trips found.
                 </td>
               </tr>

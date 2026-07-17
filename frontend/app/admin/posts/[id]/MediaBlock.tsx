@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Trash2, Image as ImageIcon } from "lucide-react";
 import { useState } from "react";
+import { useDroppable } from "@dnd-kit/core";
 
 function getMediaUrl(block: any) {
   if (!block) return null;
@@ -20,14 +21,37 @@ function getMediaUrl(block: any) {
   return null;
 }
 
+function DroppableHalf({ id, label, side }: { id: string; label: string; side: "left" | "right" }) {
+  const { isOver, setNodeRef } = useDroppable({ id });
+  
+  return (
+    <div
+      ref={setNodeRef}
+      className={`w-1/2 h-full flex items-center justify-center transition-all ${
+        isOver
+          ? "bg-amber/20 border-2 border-dashed border-amber"
+          : "bg-transparent border border-dashed border-ink/5 hover:bg-cream/10"
+      } ${side === "left" ? "rounded-l-md" : "rounded-r-md"}`}
+    >
+      <span className={`text-xs text-amber font-semibold pointer-events-none select-none bg-white/95 px-2.5 py-1.5 rounded-md shadow-md transition-all duration-200 ${
+        isOver ? "opacity-100 scale-105" : "opacity-0 scale-95"
+      }`}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function MediaBlock({ 
   block, 
   onChange, 
-  onRemove 
+  onRemove,
+  activeDragId
 }: { 
   block: any; 
   onChange: (updates: any) => void;
   onRemove: () => void;
+  activeDragId?: string | null;
 }) {
   const {
     attributes,
@@ -91,26 +115,8 @@ export function MediaBlock({
             value={block.caption || ""}
             onChange={(e) => onChange({ caption: e.target.value })}
             placeholder="Caption (optional)"
-            className="flex-1 text-sm bg-cream text-ink rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-amber"
+            className="w-full text-sm bg-cream text-ink rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-amber"
           />
-          <select 
-            value={block.layout_position === 0 ? "left" : block.layout_position === 1 ? "right" : "full"}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val === "full") {
-                onChange({ layout_position: undefined, layout_row: undefined });
-              } else if (val === "left") {
-                onChange({ layout_position: 0 });
-              } else if (val === "right") {
-                onChange({ layout_position: 1 });
-              }
-            }}
-            className="text-xs bg-cream text-dust rounded px-2 py-1.5 outline-none focus:text-ink"
-          >
-            <option value="full">Full Width</option>
-            <option value="left">Half Left</option>
-            <option value="right">Half Right</option>
-          </select>
         </div>
       </div>
 
@@ -121,6 +127,14 @@ export function MediaBlock({
       >
         <Trash2 size={18} />
       </button>
+
+      {/* Droppable overlays visible only when another block is being dragged */}
+      {activeDragId && activeDragId !== block.id.toString() && block.layout_position === undefined && (
+        <div className="absolute inset-0 flex pointer-events-auto z-20">
+          <DroppableHalf id={`drop-left-${block.id}`} label="⬅️ Place Left" side="left" />
+          <DroppableHalf id={`drop-right-${block.id}`} label="Place Right ➡️" side="right" />
+        </div>
+      )}
     </div>
   );
 }

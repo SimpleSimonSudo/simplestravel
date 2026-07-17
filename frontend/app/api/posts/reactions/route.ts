@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, message: "Post not found." }, { status: 404 });
     }
 
-    const reactionsDb = post.reactions || {};
+    const reactionsDb: Record<string, string[]> = post.reactions || {};
     const allVisitorIdsSet = new Set<string>();
     VALID_REACTIONS.forEach((type) => {
       const list = reactionsDb[type] || [];
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "Post not found." }, { status: 404 });
     }
 
-    const reactionsDb = post.reactions || {};
+    const reactionsDb: Record<string, string[]> = post.reactions || {};
     const visitorList = reactionsDb[reaction_type] || [];
     let updatedList: string[];
     let reacted = false;
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
       reacted = true;
     }
 
-    const updatedReactions = {
+    const updatedReactions: Record<string, string[]> = {
       ...reactionsDb,
       [reaction_type]: updatedList
     };

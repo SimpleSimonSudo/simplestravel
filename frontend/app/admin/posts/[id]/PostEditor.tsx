@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Save, ImagePlus, Type, MapPin } from "lucide-react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { TextBlock } from "./TextBlock";
 import { MediaBlock } from "./MediaBlock";
@@ -11,44 +11,33 @@ import LocationMap from "@/components/LocationMap";
 import { getPresignedUploadUrl } from "../../actions/upload";
 import { savePost } from "../actions";
 
+
+
 function normalizeLayoutRows(blocks: any[]) {
-  return blocks.map((block, idx) => {
+  const result = [...blocks];
+  let i = 0;
+  while (i < result.length) {
+    const block = result[i];
     if (block.type === "image" || block.type === "video") {
-      // If this block is Left
-      if (block.layout_position === 0) {
-        // Check if next block is Right
-        const nextBlock = blocks[idx + 1];
-        const isNextPartner = nextBlock && 
-          (nextBlock.type === "image" || nextBlock.type === "video") && 
-          nextBlock.layout_position === 1;
-
-        if (isNextPartner) {
-          const rowId = block.layout_row || block.id || Date.now().toString();
-          return { ...block, layout_row: rowId };
+      if (block.layout_row) {
+        const nextBlock = result[i + 1];
+        if (nextBlock && (nextBlock.type === "image" || nextBlock.type === "video") && nextBlock.layout_row === block.layout_row) {
+          result[i] = { ...block, layout_position: 0 };
+          result[i + 1] = { ...nextBlock, layout_position: 1 };
+          i += 2;
         } else {
-          // Left block without a Right partner -> clear layout_row but keep layout_position
-          return { ...block, layout_row: undefined };
+          result[i] = { ...block, layout_position: undefined, layout_row: undefined };
+          i++;
         }
+      } else {
+        result[i] = { ...block, layout_position: undefined, layout_row: undefined };
+        i++;
       }
-      // If this block is Right
-      if (block.layout_position === 1) {
-        // Check if previous block is Left
-        const prevBlock = blocks[idx - 1];
-        const isPrevPartner = prevBlock && 
-          (prevBlock.type === "image" || prevBlock.type === "video") && 
-          prevBlock.layout_position === 0;
-
-        if (isPrevPartner) {
-          const rowId = prevBlock.layout_row || prevBlock.id || Date.now().toString();
-          return { ...block, layout_row: rowId };
-        } else {
-          // Right block without a Left partner -> clear layout_row but keep layout_position
-          return { ...block, layout_row: undefined };
-        }
-      }
+    } else {
+      i++;
     }
-    return block;
-  });
+  }
+  return result;
 }
 
 export function PostEditor({
@@ -66,22 +55,26 @@ export function PostEditor({
   const [draft, setDraft] = useState(() => {
     if (initialPost) {
       const normalizedBlocks = (initialPost.content_blocks || []).map((block: any, index: number) => {
-        if (block.type === "text") {
+        const blockId = block.id || `block-${index}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        const baseBlock = { ...block, id: blockId };
+        
+        if (baseBlock.type === "text") {
           return {
-            ...block,
-            text: block.text || block.text_content || "",
-            subtype: block.subtype || block.text_subtype || "paragraph",
+            ...baseBlock,
+            text: baseBlock.text || baseBlock.text_content || "",
+            subtype: baseBlock.subtype || baseBlock.text_subtype || "paragraph",
           };
         }
-        if (block.type === "image") {
+        if (baseBlock.type === "image") {
           const matchingMedia = (initialMedia || []).find((m: any) => m.block_index === index);
           return {
-            ...block,
-            storage_path: block.storage_path || matchingMedia?.storage_path || matchingMedia?.original_url || null,
-            caption: block.caption || matchingMedia?.caption || "",
+            ...baseBlock,
+            storage_path: baseBlock.storage_path || matchingMedia?.storage_path || matchingMedia?.original_url || null,
+            original_url: baseBlock.original_url || matchingMedia?.original_url || matchingMedia?.storage_path || null,
+            caption: baseBlock.caption || matchingMedia?.caption || "",
           };
         }
-        return block;
+        return baseBlock;
       });
       return {
         ...initialPost,
@@ -146,7 +139,7 @@ export function PostEditor({
   const handleBlockChange = (id: string, updates: any) => {
     setDraft((prev: any) => {
       const updatedBlocks = prev.content_blocks.map((b: any) => 
-        b.id === id ? { ...b, ...updates } : b
+        b.id.toString() === id.toString() ? { ...b, ...updates } : b
       );
       return {
         ...prev,
@@ -157,7 +150,7 @@ export function PostEditor({
 
   const handleBlockRemove = (id: string) => {
     setDraft((prev: any) => {
-      const updatedBlocks = prev.content_blocks.filter((b: any) => b.id !== id);
+      const updatedBlocks = prev.content_blocks.filter((b: any) => b.id.toString() !== id.toString());
       return {
         ...prev,
         content_blocks: normalizeLayoutRows(updatedBlocks),
@@ -249,18 +242,73 @@ export function PostEditor({
     useSensor(KeyboardSensor)
   );
 
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const handleDragStart = (event: any) => {
+    if (event.active) {
+      setActiveDragId(event.active.id.toString());
+    }
+  };
+
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setDraft((prev: any) => {
-        const oldIndex = prev.content_blocks.findIndex((b: any) => b.id === active.id);
-        const newIndex = prev.content_blocks.findIndex((b: any) => b.id === over.id);
-        const reordered = arrayMove(prev.content_blocks, oldIndex, newIndex);
-        return {
-          ...prev,
-          content_blocks: normalizeLayoutRows(reordered)
-        };
-      });
+    setActiveDragId(null);
+    
+    if (over) {
+      const overIdStr = over.id.toString();
+      
+      if (overIdStr.startsWith("drop-left-") || overIdStr.startsWith("drop-right-")) {
+        const isLeft = overIdStr.startsWith("drop-left-");
+        const targetId = isLeft 
+          ? overIdStr.replace("drop-left-", "") 
+          : overIdStr.replace("drop-right-", "");
+          
+        setDraft((prev: any) => {
+          const targetIdx = prev.content_blocks.findIndex((b: any) => b.id.toString() === targetId.toString());
+          const activeIdx = prev.content_blocks.findIndex((b: any) => b.id.toString() === active.id.toString());
+          
+          if (targetIdx !== -1 && activeIdx !== -1) {
+            const activeBlock = { 
+              ...prev.content_blocks[activeIdx], 
+              layout_row: targetId, 
+              layout_position: isLeft ? 0 : 1 
+            };
+            const targetBlock = { 
+              ...prev.content_blocks[targetIdx], 
+              layout_row: targetId, 
+              layout_position: isLeft ? 1 : 0 
+            };
+
+            const newBlocks = [...prev.content_blocks];
+            newBlocks.splice(activeIdx, 1);
+            
+            const newTargetIdx = newBlocks.findIndex((b: any) => b.id.toString() === targetId.toString());
+            newBlocks[newTargetIdx] = targetBlock;
+            
+            const insertIdx = isLeft ? newTargetIdx : newTargetIdx + 1;
+            newBlocks.splice(insertIdx, 0, activeBlock);
+            
+            return {
+              ...prev,
+              content_blocks: normalizeLayoutRows(newBlocks)
+            };
+          }
+          return prev;
+        });
+        return;
+      }
+      
+      if (active.id.toString() !== over.id.toString()) {
+        setDraft((prev: any) => {
+          const oldIndex = prev.content_blocks.findIndex((b: any) => b.id.toString() === active.id.toString());
+          const newIndex = prev.content_blocks.findIndex((b: any) => b.id.toString() === over.id.toString());
+          const reordered = arrayMove(prev.content_blocks, oldIndex, newIndex);
+          return {
+            ...prev,
+            content_blocks: normalizeLayoutRows(reordered)
+          };
+        });
+      }
     }
   };
 
@@ -285,11 +333,13 @@ export function PostEditor({
               block={block} 
               onChange={(updates) => handleBlockChange(block.id, updates)} 
               onRemove={() => handleBlockRemove(block.id)} 
+              activeDragId={activeDragId}
             />
             <MediaBlock 
               block={nextBlock} 
               onChange={(updates) => handleBlockChange(nextBlock.id, updates)} 
               onRemove={() => handleBlockRemove(nextBlock.id)} 
+              activeDragId={activeDragId}
             />
           </div>
         );
@@ -304,7 +354,7 @@ export function PostEditor({
         if (block.type === "text") {
           rendered.push(<TextBlock {...blockProps} />);
         } else if (block.type === "image" || block.type === "video") {
-          rendered.push(<MediaBlock {...blockProps} />);
+          rendered.push(<MediaBlock {...blockProps} activeDragId={activeDragId} />);
         } else {
           rendered.push(<div key={block.id}>Unknown block type</div>);
         }
@@ -330,7 +380,7 @@ export function PostEditor({
 
         {/* Blocks Editor */}
         <div className="space-y-4">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <SortableContext items={draft.content_blocks.map((b: any) => b.id) || []} strategy={verticalListSortingStrategy}>
               {renderEditorBlocks(draft.content_blocks)}
             </SortableContext>

@@ -4,19 +4,23 @@ import { createAdminClient } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { getAdminSessionOrNull } from "@/lib/session";
 
 const TripSchema = z.object({
   trip_name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  start_date: z.string().optional(),
-  end_date: z.string().optional(),
+  start_date: z.string().optional().nullable(),
+  end_date: z.string().optional().nullable(),
   total_distance_km: z.number().optional().nullable(),
   companions: z.array(z.string()).optional(),
 });
 
 export async function saveTrip(tripId: string | "new", formData: FormData) {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { error: "Unauthorized." };
+
   const supabase = createAdminClient();
-  
+
   const rawData = {
     trip_name: formData.get("trip_name") as string,
     description: formData.get("description") as string,
@@ -49,6 +53,9 @@ export async function saveTrip(tripId: string | "new", formData: FormData) {
 }
 
 export async function updateTripCountries(tripId: number, countryConnections: any[]) {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { error: "Unauthorized." };
+
   const supabase = createAdminClient();
 
   // First clear existing connections
@@ -81,8 +88,11 @@ export async function updateTripCountries(tripId: number, countryConnections: an
 }
 
 export async function toggleMediaTitleTag(mediaId: number, hasTitleTag: boolean) {
+  const session = await getAdminSessionOrNull();
+  if (!session) return { error: "Unauthorized." };
+
   const supabase = createAdminClient();
-  
+
   // First, fetch current tags
   const { data: media, error: fetchError } = await supabase
     .from("media")
@@ -95,11 +105,12 @@ export async function toggleMediaTitleTag(mediaId: number, hasTitleTag: boolean)
   let tags = media.tags || [];
   
   if (hasTitleTag) {
-    // We want to add it
-    if (!tags.includes("#title")) tags.push("#title");
+    // Remove any existing #title or #title-* first, then add "#title"
+    tags = tags.filter((t: string) => !t.startsWith("#title"));
+    tags.push("#title");
   } else {
-    // We want to remove it
-    tags = tags.filter((t: string) => t !== "#title");
+    // We want to remove all starting with #title (e.g. #title, #title-top, #title-bottom)
+    tags = tags.filter((t: string) => !t.startsWith("#title"));
   }
 
   const { error: updateError } = await supabase
@@ -109,6 +120,5 @@ export async function toggleMediaTitleTag(mediaId: number, hasTitleTag: boolean)
 
   if (updateError) return { error: updateError.message };
   
-  // No redirect, just return success so the client can refresh
   return { success: true };
 }

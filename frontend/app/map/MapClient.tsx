@@ -86,11 +86,11 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
   const [layerMode, setLayerMode] = useState<"cream" | "satellite">("satellite");
   const [hoveredCountry, setHoveredCountry] = useState<any>(null);
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
-  const [showInfoBox, setShowInfoBox] = useState(true);
+  const [showInfoBox, setShowInfoBox] = useState(false);
   const [showHighlights, setShowHighlights] = useState(false);
   const [showHoverCard, setShowHoverCard] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  
+
   // Trip and Line state
   const [selectedTripId, setSelectedTripId] = useState<string>("all");
   const [showLines, setShowLines] = useState(false);
@@ -111,6 +111,13 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
       }
       if (postParam) {
         setSelectedPostId(postParam);
+      }
+
+      // Check sessionStorage so that map welcome popup shows only once per session
+      const shown = sessionStorage.getItem("map_info_box_shown");
+      if (!shown) {
+        setShowInfoBox(true);
+        sessionStorage.setItem("map_info_box_shown", "true");
       }
     }
   }, []);
@@ -745,17 +752,15 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
               <div className="flex gap-1 p-0.5 bg-cream/40 rounded-xs border border-ink/5">
                 <button
                   onClick={() => setLayerMode("cream")}
-                  className={`flex-1 py-1 rounded-2xs text-[10px] font-bold uppercase transition-all ${
-                    layerMode === "cream" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
-                  }`}
+                  className={`flex-1 py-1 rounded-2xs text-[10px] font-bold uppercase transition-all ${layerMode === "cream" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
+                    }`}
                 >
                   Cream
                 </button>
                 <button
                   onClick={() => setLayerMode("satellite")}
-                  className={`flex-1 py-1 rounded-2xs text-[10px] font-bold uppercase transition-all ${
-                    layerMode === "satellite" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
-                  }`}
+                  className={`flex-1 py-1 rounded-2xs text-[10px] font-bold uppercase transition-all ${layerMode === "satellite" ? "bg-amber text-white shadow-xs" : "text-dust hover:text-ink"
+                    }`}
                 >
                   Satellite
                 </button>
@@ -782,7 +787,7 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
             {/* Feature Toggles */}
             <div className="border-t border-ink/5 pt-3 flex flex-col gap-2.5">
               <span className="block text-[10px] uppercase font-bold tracking-wider text-dust mb-1">Overlay Features</span>
-              
+
               {/* Travel Lines Toggle */}
               <label className="flex items-center justify-between cursor-pointer select-none text-[11px]">
                 <span className="text-ink font-medium">Show Travel Lines</span>
@@ -837,7 +842,7 @@ export default function MapClient({ posts, visitedCountries, trips }: MapClientP
           <span className="overline text-2xs mb-1 text-dust">Travel Map</span>
           <h2 className="font-display font-black text-2xl text-ink mb-2">World Map</h2>
           <p className="text-xs text-dust leading-relaxed mb-4 pr-4">
-            Here you will find all geographically recorded moments of our travels. Click on the pins to see previews of the posts. Hover over countries to view details.
+            Here you will find all geographically recorded moments of our travels. Click on the pins to see previews of the posts. Check the Map Options for different filters and settings.
           </p>
           <div className="flex items-center justify-between border-t border-ink/5 pt-4 text-xs font-medium">
             <span className="text-dust">Recorded Locations:</span>

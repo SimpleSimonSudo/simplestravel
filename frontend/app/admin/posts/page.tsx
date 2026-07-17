@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PlusCircle } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase";
-import AdminPostRow from "./AdminPostRow";
+import { AdminClickableRow } from "@/components/AdminClickableRow";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +19,23 @@ export default async function AdminPostsList({
     .order("actual_date", { ascending: false });
 
   if (query) {
-    dbQuery = dbQuery.ilike("title", `%${query}%`);
+    const cleanQuery = query.startsWith("#") ? query.slice(1) : query;
+    dbQuery = dbQuery.or(`title.ilike.%${query}%,tags.cs.{"${query}"},tags.cs.{"${cleanQuery}"}`);
   }
   
-  // Note: the timeline view has 'country' (name) and 'trip_name', not IDs. 
-  // If we want to filter by ID we should query the posts table directly.
-  // For simplicity here, we'll query the 'timeline' view which is very useful for lists.
+  // Fetch all posts to extract all unique tags dynamically
+  const { data: allPostsTags } = await supabase
+    .from("posts")
+    .select("tags");
+
+  const uniqueTags = Array.from(
+    new Set(
+      (allPostsTags || [])
+        .flatMap((p: any) => p.tags || [])
+        .map((t: string) => t.trim())
+        .filter((t: string) => t !== "")
+    )
+  ).sort((a, b) => a.localeCompare(b));
 
   const { data: posts, error } = await dbQuery.limit(50); // Pagination in real app
 
@@ -44,20 +55,53 @@ export default async function AdminPostsList({
         </Link>
       </header>
 
-      <div className="bg-white border border-ink/10 rounded-md p-4 flex gap-4 flex-wrap">
+      <div className="bg-white border border-ink/10 rounded-md p-4 flex flex-col gap-4">
         {/* Simple Search Form - GET method to update URL params */}
-        <form className="flex-1 flex gap-4 min-w-[300px]">
+        <form className="w-full flex gap-4">
           <input
             type="text"
             name="query"
             defaultValue={query || ""}
-            placeholder="Search by title..."
-            className="flex-1 px-3 py-2 border border-ink/20 rounded focus:outline-none focus:border-amber"
+            placeholder="Search by title or tag (e.g. #japan)..."
+            className="flex-1 px-3 py-2 border border-ink/20 rounded focus:outline-none focus:border-amber text-sm bg-white"
           />
-          <button type="submit" className="bg-cream text-ink px-4 py-2 rounded hover:bg-cream/70 transition-colors">
+          <button type="submit" className="bg-cream text-ink px-4 py-2 rounded hover:bg-cream/70 transition-colors text-sm font-semibold">
             Search
           </button>
         </form>
+
+        {uniqueTags.length > 0 && (
+          <div className="w-full border-t border-ink/5 pt-3">
+            <p className="text-xs text-dust mb-2 font-medium">Filter by tag preview:</p>
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-2">
+              {uniqueTags.map((tag: string) => {
+                const displayTag = tag.startsWith("#") ? tag : `#${tag}`;
+                const isSelected = query === tag || query === displayTag || (query && query.toLowerCase() === tag.toLowerCase());
+                return (
+                  <Link
+                    key={tag}
+                    href={`/admin/posts?query=${encodeURIComponent(tag)}`}
+                    className={`text-xs px-2 py-1 rounded transition-colors ${
+                      isSelected
+                        ? "bg-amber text-white font-semibold"
+                        : "bg-cream text-ink hover:bg-cream/80"
+                    }`}
+                  >
+                    {displayTag}
+                  </Link>
+                );
+              })}
+              {query && (
+                <Link
+                  href="/admin/posts"
+                  className="text-xs px-2.5 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors font-semibold"
+                >
+                  Clear filter ×
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-ink/10 rounded-md shadow-sm overflow-hidden">
@@ -72,7 +116,7 @@ export default async function AdminPostsList({
           </thead>
           <tbody className="divide-y divide-ink/10">
             {posts?.map((post: any) => (
-              <AdminPostRow key={post.post_id} postId={post.post_id}>
+              <AdminClickableRow key={post.post_id} href={`/admin/posts/${post.post_id}`}>
                 <td className="py-3 px-4 text-dust text-sm whitespace-nowrap">
                   {new Date(post.actual_date).toLocaleDateString()}
                 </td>
@@ -85,7 +129,7 @@ export default async function AdminPostsList({
                 <td className="py-3 px-4 text-dust hidden lg:table-cell">
                   {post.trip_name || "-"}
                 </td>
-              </AdminPostRow>
+              </AdminClickableRow>
             ))}
             {(!posts || posts.length === 0) && (
               <tr>

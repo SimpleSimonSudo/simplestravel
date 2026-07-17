@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import ContentBlocksRenderer from "@/components/ContentBlocksRenderer";
 import PostFooter from "@/components/PostFooter";
 import PostSeparator from "@/components/PostSeparators";
@@ -153,13 +154,13 @@ export default function TripContent({ posts, fullPosts, media, tripId }: TripCon
                     {post.title && (
                       <div className="flex justify-center w-full py-1">
                         <h2 className="font-display font-bold text-lg md:text-xl text-center">
-                          <a 
-                            href={`/post/${post.post_id}`} 
+                          <Link
+                            href={`/post/${post.post_id}`}
                             className="text-ink hover:text-amber transition-colors duration-300 relative group"
                           >
                             {post.title}
                             <span className="absolute left-0 right-0 bottom-0 h-[1px] bg-amber/0 group-hover:bg-amber/40 transition-colors duration-300" />
-                          </a>
+                          </Link>
                         </h2>
                       </div>
                     )}

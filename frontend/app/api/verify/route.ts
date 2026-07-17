@@ -272,7 +272,7 @@ export async function POST(request: NextRequest) {
       }
 
       visitorId = newVisitor.visitor_id;
-      avatarId = newVisitor.avatar_id;
+      avatarId = newVisitor.avatar_id || "avatar_1";
     }
 
     // 3. Signiertes Session-Token ausstellen. Ein Cookie für Identität + Admin-Claim,

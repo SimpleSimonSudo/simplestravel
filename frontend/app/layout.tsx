@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import RecoveryToast from "@/components/RecoveryToast";
+import { getTripsWithCountries } from "@/lib/queries";
+import type { TripWithCountries } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: {
@@ -12,11 +15,21 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false }, // Private blog
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Fetched here (server-side, once per request) instead of in Header via a
+  // client-side useEffect — avoids the nav-dropdown's "empty, then pop in
+  // after hydration" flicker and drops a client-side anon-key Supabase call.
+  let trips: TripWithCountries[] = [];
+  try {
+    trips = await getTripsWithCountries();
+  } catch (err) {
+    console.error("Failed to fetch trips for header:", err);
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -24,9 +37,10 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body>
-        <Header />
+        <Header trips={trips} />
         <main>{children}</main>
         <Footer />
+        <RecoveryToast />
       </body>
     </html>
   );

@@ -108,7 +108,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert reply
-    const { data: inserted, error: insertErr } = await adminClient
+    // Cast to `any`: embeds community_visitors — see the identical comment in
+    // app/api/community/impulses/route.ts for why this isn't hand-modeled
+    // through Database["Relationships"] instead.
+    const { data: insertedRaw, error: insertErr } = await adminClient
       .from("community_replies")
       .insert({
         impulse_id,
@@ -120,6 +123,7 @@ export async function POST(request: NextRequest) {
         community_visitors (display_name, visitor_id, avatar_id)
       `)
       .single();
+    const inserted = insertedRaw as any;
 
     if (insertErr || !inserted) {
       console.error("Error inserting reply:", insertErr);

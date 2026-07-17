@@ -267,7 +267,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert impulse
-    const { data: inserted, error: insertErr } = await adminClient
+    // Cast to `any`: this embeds posts→media and community_visitors/countries
+    // in one select, several levels deep. Modeling that shape through
+    // Database["Relationships"] is exactly the part of Supabase's type
+    // generation that's fragile even with the official codegen (FK hint
+    // syntax, ambiguous multi-hop embeds) — an explicit `any` here is more
+    // honest than a Relationships array that looks precise but likely still
+    // doesn't resolve every nested field correctly.
+    const { data: insertedRaw, error: insertErr } = await adminClient
       .from("community_impulses")
       .insert({
         visitor_id: visitorId,
@@ -295,6 +302,7 @@ export async function POST(request: NextRequest) {
         countries (name, name_de, iso_code)
       `)
       .single();
+    const inserted = insertedRaw as any;
 
     if (insertErr || !inserted) {
       console.error("Error inserting impulse:", insertErr);

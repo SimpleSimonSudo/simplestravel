@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import { AVATARS, renderAvatarSvg } from "@/lib/avatars";
 
 interface Country {
@@ -1462,9 +1463,9 @@ export default function CommunityClient({ initialBoards, countries, posts, trips
                       ) : (
                         <p className="text-3xs text-dust font-body text-center pl-2 pt-2 border-t border-ink/5">
                           Please{" "}
-                          <a href="/gate" className="text-amber hover:underline font-semibold">
+                          <Link href="/gate" className="text-amber hover:underline font-semibold">
                             verify your profile
-                          </a>{" "}
+                          </Link>{" "}
                           to comment.
                         </p>
                       )}

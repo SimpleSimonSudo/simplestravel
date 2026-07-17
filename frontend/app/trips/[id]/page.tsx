@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createServerClient } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import TripContent from "./TripContent";
@@ -111,13 +112,13 @@ export default async function TripDetailPage({ params }: Props) {
     <div className="min-h-screen bg-paper pb-24 pt-32 px-8">
       <div className="max-w-4xl mx-auto">
         {/* Back link */}
-        <a href="/#trips" className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-dust hover:text-amber transition-colors font-body mb-8 group">
+        <Link href="/#trips" className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-dust hover:text-amber transition-colors font-body mb-8 group">
           <svg className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <line x1="19" y1="12" x2="5" y2="12"></line>
             <polyline points="12 19 5 12 12 5"></polyline>
           </svg>
           All Trips
-        </a>
+        </Link>
 
         {/* Header layout: flex-col on mobile, flex-row on desktop */}
         <header className="mb-4 border-b border-ink/10 pb-12 flex flex-col md:flex-row gap-8 justify-between items-start">

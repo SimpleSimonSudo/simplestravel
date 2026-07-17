@@ -1,44 +1,28 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import type { TripWithCountries } from "@/lib/types";
 
-export default function Header() {
+export default function Header({ trips: allTrips }: { trips: TripWithCountries[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isJournalDropdownOpen, setIsJournalDropdownOpen] = useState(false);
-  const [trips, setTrips] = useState<TripWithCountries[]>([]);
   const pathname = usePathname();
   const isMapPage = pathname === "/map";
 
-  // Hide the header completely in the admin panel (but not on admin-login)
+  // Hide the header completely in the admin panel (but not on admin-login).
+  // Placed after all hooks above (not before, like the previous version) —
+  // conditionally skipping a hook call across renders violates React's
+  // Rules of Hooks.
   if (pathname === "/admin" || pathname?.startsWith("/admin/")) {
     return null;
   }
 
-  useEffect(() => {
-    async function fetchTrips() {
-      try {
-        const { data, error } = await supabase
-          .from("trips_with_countries")
-          .select("*")
-          .order("start_date", { ascending: false, nullsFirst: false });
-
-        if (error) {
-          console.error("Error fetching trips for header:", error);
-          return;
-        }
-
-        // Filter out Tiny Journeys (trips with post_count < 10)
-        const filtered = ((data as TripWithCountries[]) ?? []).filter((trip) => trip.post_count >= 10);
-        setTrips(filtered);
-      } catch (err) {
-        console.error("Failed to fetch trips for header:", err);
-      }
-    }
-    fetchTrips();
-  }, []);
+  // Filter out Tiny Journeys (trips with post_count < 10) — a Header-only
+  // display concern, so it stays here rather than in the shared
+  // getTripsWithCountries() query used elsewhere.
+  const trips = allTrips.filter((trip) => trip.post_count >= 10);
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -79,15 +63,15 @@ export default function Header() {
       <div className="flex items-center justify-between px-8 py-5">
         {/* Wordmark logo */}
         {/* Wordmark logo */}
-        <a 
-          href="/" 
+        <Link
+          href="/"
           className="font-display text-2xl tracking-wide hover:text-amber transition-colors"
           style={{ color: logoColor }}
         >
           <span className="italic">traveling</span>
           <span className="mx-1.5" style={{ color: navColor }}>·</span>
           <span className="font-light text-base uppercase tracking-widest2" style={{ color: navColor }}>planet earth</span>
-        </a>
+        </Link>
 
         {/* Desktop Nav links */}
         <nav className="hidden md:flex items-center gap-8">
@@ -103,13 +87,13 @@ export default function Header() {
                 }}
               >
                 {trips.map((trip) => (
-                  <a
+                  <Link
                     key={trip.trip_id}
                     href={`/trips/${trip.trip_id}`}
                     className={`block px-4 py-2.5 transition-colors font-medium text-[13px] tracking-wide ${itemHoverClass}`}
                   >
                     {trip.trip_name}
-                  </a>
+                  </Link>
                 ))}
               </div>
             )}
@@ -178,7 +162,7 @@ export default function Header() {
             {isJournalDropdownOpen && trips.length > 0 && (
               <div className="pl-4 mt-2 mb-1 flex flex-col gap-3 border-l border-amber/35">
                 {trips.map((trip) => (
-                  <a
+                  <Link
                     key={trip.trip_id}
                     href={`/trips/${trip.trip_id}`}
                     onClick={() => {
@@ -189,7 +173,7 @@ export default function Header() {
                     style={{ color: navColor }}
                   >
                     {trip.trip_name}
-                  </a>
+                  </Link>
                 ))}
               </div>
             )}
@@ -216,13 +200,13 @@ function NavLink({
   color?: string;
 }) {
   return (
-    <a
+    <Link
       href={href}
       onClick={onClick}
       className="text-sm uppercase tracking-widest hover:text-amber transition-colors font-body py-1.5 block md:py-0"
       style={{ color: color }}
     >
       {children}
-    </a>
+    </Link>
   );
 }

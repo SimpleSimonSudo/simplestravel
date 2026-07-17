@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { cookies } from "next/headers";
 
 // Signed, per-visitor session tokens (HMAC-SHA256 via Web Crypto — works on both
 // the Cloudflare Workers edge runtime and Node) instead of a single shared
@@ -120,4 +121,20 @@ export async function getVerifiedSession(request: NextRequest): Promise<SessionP
   if (!secret) return null;
   const token = request.cookies.get("travel_session")?.value;
   return verifySessionToken(token, secret);
+}
+
+// Server Actions ("use server" functions) aren't route handlers — they don't
+// receive a NextRequest, and Next.js invokes them by action ID via POST to
+// whatever page they're called from, not necessarily under /admin/*. That
+// means middleware's path-based admin check isn't a guarantee for them; each
+// admin action must verify the session itself. Reads the cookie via
+// next/headers, which is what Server Actions have access to.
+export async function getAdminSessionOrNull(): Promise<SessionPayload | null> {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) return null;
+  const cookieStore = await cookies();
+  const token = cookieStore.get("travel_session")?.value;
+  const session = await verifySessionToken(token, secret);
+  if (!session || !session.adm) return null;
+  return session;
 }

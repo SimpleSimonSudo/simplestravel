@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { Lock, ShieldAlert, Key, Loader2 } from "lucide-react";
 
 export default function AdminLoginPage() {
@@ -68,11 +69,11 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-paper flex flex-col justify-between py-16 px-6 animate-fade-in">
       {/* Header Wordmark */}
       <header className="text-center">
-        <a href="/" className="font-display text-2xl tracking-wide text-ink select-none hover:text-amber transition-colors">
+        <Link href="/" className="font-display text-2xl tracking-wide text-ink select-none hover:text-amber transition-colors">
           <span className="italic">traveling</span>
           <span className="text-dust mx-1.5">·</span>
           <span className="font-light text-dust text-base uppercase tracking-widest2">planet earth</span>
-        </a>
+        </Link>
       </header>
 
       {/* Main card */}

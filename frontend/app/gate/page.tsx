@@ -251,6 +251,9 @@ export default function GatePage() {
         if (data.visitorId) {
           localStorage.setItem("travel_visitor_id", data.visitorId);
         }
+        if (flow !== "restore") {
+          localStorage.setItem("show_recovery_toast", "true");
+        }
       }
 
       // Success: redirect to redirect parameter or homepage
